@@ -15,6 +15,16 @@ import { getThumbObjectUrl } from '../offline/thumbs';
 /** Full-size originals live on the public API. */
 const STORAGE_BASE = 'https://kabinka.by/storage/locations';
 
+/**
+ * The single source of truth for a full-size photo URL on the public API:
+ * "https://kabinka.by/storage/locations/{id}/photo_{N}.jpg". Used by the online
+ * thumb fallback here and by the card gallery (ui/gallery.ts), so the scheme is
+ * defined once and the two cannot drift.
+ */
+export function fullPhotoUrl(locationId: number, photoIndex: number): string {
+  return `${STORAGE_BASE}/${locationId}/photo_${photoIndex}.jpg`;
+}
+
 /** Strip any directory prefix, returning just "{id}_photo_N.jpg". */
 export function thumbBasename(thumb: string): string {
   const i = thumb.lastIndexOf('/');
@@ -28,7 +38,7 @@ export function thumbBasename(thumb: string): string {
 function onlineFullUrl(basename: string): string | null {
   const m = /^(\d+)_photo_(\d+)\.jpg$/i.exec(basename);
   if (!m) return null;
-  return `${STORAGE_BASE}/${m[1]}/photo_${m[2]}.jpg`;
+  return fullPhotoUrl(Number(m[1]), Number(m[2]));
 }
 
 /** Resolve a stored thumb path (e.g. "thumbs/38_photo_0.jpg") to a URL. */

@@ -32,11 +32,11 @@ export function applyFilters(list: Location[], f: FilterState): Location[] {
     // accessibleOnly
     if (f.accessibleOnly && !loc.is_accessible) return false;
 
-    // tagSlugs: like Kabinka — location passes if it has ANY of the selected slugs
-    if (f.tagSlugs.size > 0) {
-      const locSlugs = new Set(loc.tags.map(t => t.slug));
-      const hasAny = [...f.tagSlugs].some(slug => locSlugs.has(slug));
-      if (!hasAny) return false;
+    // tagSlugs: like Kabinka — location passes if it has ANY of the selected slugs.
+    // Probe the (small) selected-slug Set per tag instead of building a fresh Set
+    // from loc.tags for every location on every filter pass.
+    if (f.tagSlugs.size > 0 && !loc.tags.some(tg => f.tagSlugs.has(tg.slug))) {
+      return false;
     }
 
     // minRating

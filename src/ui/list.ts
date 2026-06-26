@@ -16,15 +16,25 @@ export interface ListOpts {
 }
 
 /**
- * Render the nearby list. Sorted by distance when a user position is known,
- * otherwise by overall rating (desc). Re-render by calling again with new data.
+ * Memoised sort: re-sorting ~263 places is cheap, but drawList() also fires on
+ * language switches and pack/data changes where neither the input array nor the
+ * position moved. Cache the sorted order keyed by (source array identity, exact
+ * position) so those redraws skip the sort entirely. A new `filtered` array
+ * (filter/search/data change) or a fresh geolocation invalidates the cache.
  */
-export function renderList(
-  container: HTMLElement,
-  locations: Location[],
-  opts: ListOpts,
-): void {
-  const { userPos, onSelect } = opts;
+let sortCache: {
+  src: Location[];
+  lat: number | null;
+  lng: number | null;
+  sorted: Location[];
+} | null = null;
+
+function sortLocations(locations: Location[], userPos: UserPos | null): Location[] {
+  const lat = userPos ? userPos.lat : null;
+  const lng = userPos ? userPos.lng : null;
+  if (sortCache && sortCache.src === locations && sortCache.lat === lat && sortCache.lng === lng) {
+    return sortCache.sorted;
+  }
 
   const sorted = [...locations];
   if (userPos) {
@@ -36,6 +46,23 @@ export function renderList(
   } else {
     sorted.sort((a, b) => (b.rating_overall ?? 0) - (a.rating_overall ?? 0));
   }
+
+  sortCache = { src: locations, lat, lng, sorted };
+  return sorted;
+}
+
+/**
+ * Render the nearby list. Sorted by distance when a user position is known,
+ * otherwise by overall rating (desc). Re-render by calling again with new data.
+ */
+export function renderList(
+  container: HTMLElement,
+  locations: Location[],
+  opts: ListOpts,
+): void {
+  const { userPos, onSelect } = opts;
+
+  const sorted = sortLocations(locations, userPos);
 
   container.replaceChildren();
   container.className = 'list';

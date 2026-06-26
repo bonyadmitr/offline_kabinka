@@ -1,10 +1,11 @@
 import type { Location, Photo } from '../core/types';
 import { lazyThumb } from './lazy-thumb';
+import { fullPhotoUrl } from './thumb-url';
 import { t } from '../i18n';
 
 // Full-size originals live on the public API. We deliberately load them with a plain
 // <img> (no headers) so the browser issues a simple GET with no CORS preflight.
-const STORAGE_BASE = 'https://kabinka.by/storage/locations';
+// The URL scheme itself lives in thumb-url.ts (fullPhotoUrl) so it stays in sync.
 
 function photoIndex(photo: Photo): number {
   // remote: "/storage/locations/{id}/photo_{N}.jpg"
@@ -13,7 +14,7 @@ function photoIndex(photo: Photo): number {
 }
 
 function fullUrl(locationId: number, photo: Photo): string {
-  return `${STORAGE_BASE}/${locationId}/photo_${photoIndex(photo)}.jpg`;
+  return fullPhotoUrl(locationId, photoIndex(photo));
 }
 
 /**
