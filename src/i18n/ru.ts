@@ -148,6 +148,10 @@ export const ru = {
   'sheet.label': 'Список туалетов',
   'sheet.resize': 'Перетащите, чтобы изменить размер',
 
+  // ── Desktop panel collapse ──
+  'panel.collapse': 'Свернуть список',
+  'panel.show': 'Список',
+
   // ── Share ──
   'share.copied': 'Ссылка скопирована',
 

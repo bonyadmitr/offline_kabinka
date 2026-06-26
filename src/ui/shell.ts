@@ -10,8 +10,18 @@ import { t } from '../i18n';
 export interface Shell {
   map: maplibregl.Map;
   sheet: Sheet;
-  /** Slot for a top toolbar (filters / settings placeholders for WU5). */
+  /**
+   * Top-left control group. Holds the Filters button (and, on mobile, sits above
+   * the sheet). main.ts wires `[data-act="filters"]` here; the Settings button now
+   * lives in its own top-right control, returned separately.
+   */
   toolbar: HTMLElement;
+  /**
+   * Top-right Settings control (`[data-act="settings"]`). Settings are unrelated to
+   * filters, so they get their own corner on both viewports and never overlap the
+   * desktop panel/search.
+   */
+  settingsCtrl: HTMLElement;
   /**
    * The resolved bare pmtiles source string used for the initial style —
    * either the stored-blob key (`minsk`) or the network URL. main.ts reuses
@@ -45,12 +55,21 @@ export async function mountShell(root: HTMLElement, opts: ShellOpts): Promise<Sh
   mapEl.className = 'map-container';
   root.appendChild(mapEl);
 
-  // Toolbar slot (filters/settings placeholders wired in WU5).
+  // Top-left toolbar: Filters only (Settings moved to its own top-right control so
+  // it doesn't share a group with filters and never collides with the desktop
+  // panel/search — see styles.css .toolbar / .settings-ctrl).
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
   toolbar.appendChild(makeToolbarBtn(t('toolbar.filters'), 'filters', t('toolbar.filters')));
-  toolbar.appendChild(makeToolbarBtn('⚙️', 'settings', t('toolbar.settings')));
   root.appendChild(toolbar);
+
+  // Top-right Settings control (icon-only, square tap target).
+  const settingsCtrl = document.createElement('div');
+  settingsCtrl.className = 'settings-ctrl';
+  const settingsBtn = makeToolbarBtn('⚙️', 'settings', t('toolbar.settings'));
+  settingsBtn.classList.add('toolbar-btn-icon');
+  settingsCtrl.appendChild(settingsBtn);
+  root.appendChild(settingsCtrl);
 
   // Panel host for the sheet.
   const panelHost = document.createElement('div');
@@ -77,7 +96,7 @@ export async function mountShell(root: HTMLElement, opts: ShellOpts): Promise<Sh
     onError: (err) => console.warn('[geolocate]', toUserMessage(err)),
   });
 
-  return { map, sheet, toolbar, pmtilesUrl };
+  return { map, sheet, toolbar, settingsCtrl, pmtilesUrl };
 }
 
 function makeToolbarBtn(label: string, act: string, ariaLabel: string): HTMLButtonElement {

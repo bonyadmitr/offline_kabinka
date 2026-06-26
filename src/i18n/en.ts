@@ -130,6 +130,10 @@ export const en = {
   'sheet.label': 'List of toilets',
   'sheet.resize': 'Drag to resize',
 
+  // ── Desktop panel collapse ──
+  'panel.collapse': 'Collapse list',
+  'panel.show': 'List',
+
   // ── Share ──
   'share.copied': 'Link copied',
 

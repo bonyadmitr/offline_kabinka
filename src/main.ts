@@ -223,8 +223,8 @@ async function bootstrap(): Promise<void> {
     if (store.get().theme === 'system') applyEffectiveTheme();
   });
 
-  // ── Toolbar: settings button ──
-  const settingsBtn = shell.toolbar.querySelector<HTMLButtonElement>('[data-act="settings"]');
+  // ── Settings button (top-right control, separate from the filters toolbar) ──
+  const settingsBtn = shell.settingsCtrl.querySelector<HTMLButtonElement>('[data-act="settings"]');
   const buildSettingsCtx = (): SettingsCtx => {
     const s = store.get();
     return {
