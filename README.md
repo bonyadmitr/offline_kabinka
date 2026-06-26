@@ -28,7 +28,7 @@
 | Карта | MapLibre GL JS 5 + pmtiles 4 (векторные тайлы), ленивый чанк |
 | PWA / SW | vite-plugin-pwa 1 (Workbox) |
 | Хранилище | IndexedDB (idb 8) + собственный blobstore |
-| Тесты | Vitest 4 (143 юнит-теста) + Playwright (e2e, online + offline) |
+| Тесты | Vitest 4 (148 юнит-тестов) + Playwright (e2e, online + offline) |
 
 Движок карты вынесен в ленивый чанк: входной JS грузится без MapLibre, а сам
 движок подгружается динамически уже после первого показа списка (см.
@@ -70,7 +70,7 @@ npm run build && npm run preview
 
 ## Тесты
 
-### Юнит-тесты (Vitest, 143 теста)
+### Юнит-тесты (Vitest, 148 тестов)
 
 ```bash
 npx vitest run
@@ -174,6 +174,10 @@ force-push. Флаг `-f` принудительно добавляет файл
 Ветка `main` не содержит больших бинарников — они попадают только в `gh-pages`
 через `dist/`. Каждый деплой — свежий одиночный коммит с force-push, поэтому
 `gh-pages` не накапливает старые 31 МБ-блобы.
+
+Push в `gh-pages` — большой (~40 МБ за один заход), поэтому скрипт перед пушем
+поднимает `git config http.postBuffer 524288000` и повторяет push до 3 раз — иначе
+RPC рвался с `curl 55 broken pipe` (см. [проблему 15](docs/problems-and-solutions.md)).
 
 ---
 

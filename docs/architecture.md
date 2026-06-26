@@ -21,7 +21,7 @@ MapLibre GL JS с векторными тайлами через pmtiles. Сер
 src/
 ├── core/           Типы, ошибки, Store, тема, утилиты, настройки
 ├── data/           Репозиторий, IDB, фильтрация, diff, расписание
-├── map/            Карта MapLibre, стиль, маркеры, контролы
+├── map/            Карта MapLibre, стиль, маркеры, контролы, picker точек
 ├── offline/        Blobstore, downloader, pmtiles-source/key, thumbs, storage, sw-register
 ├── update/         Обновление данных и карты
 ├── routing/        Маршрут: deep-link в навигатор + офлайн-компас
@@ -88,7 +88,12 @@ class Store<T extends object> {
 
 - `getDeviceId()` — UUID в `localStorage` (`crypto.randomUUID()`), нужен для заголовка `X-Device-ID` при запросах к API
 - `haversine()`, `bearing()` — WGS84-расстояние (в метрах) и азимут (0–360°) для офлайн-расстояний и компаса
-- `loadTheme()` / `saveTheme()` (дефолт `'system'`), `loadNavigator()` / `saveNavigator()` (дефолт `'yandex_maps'`), `hasChosenNavigator()` — персистентные настройки в `localStorage`
+- `loadTheme()` / `saveTheme()` (дефолт `'system'`) — персистентная тема в `localStorage`
+- Навигатор: `loadNavigator()` (дефолт `'yandex_maps'`), `saveNavigator(id)`,
+  `hasChosenNavigator()` — был ли навигатор выбран явно (проверяет наличие ключа
+  `offline_kabinka.navigator` в `localStorage`). На этом построено запоминание
+  навигатора в `routing/`: пока выбор не сделан — панель маршрута спрашивает один
+  раз, затем сохраняет; `loadNavigator()` при этом всегда возвращает рабочий дефолт
 
 ---
 
@@ -152,12 +157,36 @@ class Store<T extends object> {
 - Атрибуция: «© OpenMapTiles © OpenStreetMap contributors» — задана прямо на источнике (обязательна по лицензии)
 - Темы: `light` / `dark` — разные палитры (`PALETTE`) для фона, воды, дорог, зданий, текста. `theme` здесь — уже *эффективная* тема
 
-### `markers.ts`, `controls.ts`
+### `markers.ts`, `pick-list.ts`, `controls.ts`
 
 `markers.ts` — источник `points` с кластеризацией (`cluster: true`, `clusterRadius
-50`, `clusterMaxZoom 14`): слои кластеров со счётчиком, одиночные точки с цветом по
-типу цены (зелёный/синий/фиолетовый) и подписью рейтинга. Клик по точке →
-`onSelect`, клик по кластеру → зум к expansion-zoom.
+50`, `clusterMaxZoom 14`): слои кластеров со счётчиком (`clusters` /
+`cluster-count`), одиночные точки (`unclustered`) с цветом по типу цены
+(зелёный/синий/фиолетовый) и подписью рейтинга (`point-rating`). Поведение клика:
+
+- **Клик по одиночной точке** — `queryRenderedFeatures(e.point, { layers:
+  ['unclustered'] })`; если под пикселем оказалась ровно одна точка → `onSelect(id)`
+  открывает карточку. Если несколько перекрывающихся точек (`> 1`) → попап
+  `point-picker` со списком.
+- **Клик по кластеру** — `getClusterExpansionZoom`: если зум *разобьёт* кластер
+  (`zoom > текущего && zoom <= maxZoom`) → `easeTo` к нему. Если дальше не разбивается
+  (точки co-located или уже максимальный зум) → `getClusterLeaves` и тот же попап
+  `point-picker` (при одном листе — сразу `onSelect`).
+
+**Picker точек** (`openPicker`) — один MapLibre `Popup` за раз (`closeButton`,
+`closeOnClick`, класс `point-picker-popup`): заголовок (`map.pickTitle` —
+«Несколько точек здесь») + список `point-picker__item` (цветная точка по
+`price_type` + название), доступный с клавиатуры (фокус на первый пункт). Клик по
+строке → `onSelect(id)`, закрытие попапа и `flyTo` к точке (zoom ≥ 16).
+`updateMarkers()` закрывает устаревший picker перед сменой данных (после фильтра).
+
+### `pick-list.ts`
+
+`buildPickList(features)` — **чистая** функция (без импорта MapLibre, тестируется
+отдельно): из набора MapLibre-фич (листья кластера или перекрывающиеся `unclustered`)
+строит `PickItem[]` (`{ id, title, priceType }`). Отбрасывает фичи без конечного
+числового `id`, дедуплицирует по `id`, сохраняет порядок. Используется
+`markers.ts` для наполнения picker'а.
 
 `controls.ts` — кастомные контролы (не штатные MapLibre): кнопки зума `+`/`−`
 (в т.ч. на мобиле) и геолокация (`navigator.geolocation`, слой точки пользователя +
@@ -282,22 +311,31 @@ In-app синхронизация с `kabinka.by/api/v1`: список (`per_pag
 
 ## `routing/` — маршрут
 
-Две независимые кнопки в панели маршрута, ни одна не блокирует другую:
+`startRoute(map, loc, opts)` строит панель маршрута с **двумя независимыми
+кнопками**, ни одна не блокирует другую:
 
-- **«Открыть в навигаторе»** (нужна сеть / приложение навигатора): deep-link в
-  Яндекс Карты / Яндекс Навигатор / Google / Apple. В первый раз спрашивает, какой
-  навигатор использовать, и запоминает выбор (`saveNavigator`); дальше открывает
-  сразу. Есть кнопка «Сменить навигатор». Если известна позиция пользователя —
-  передаёт обе точки (откуда→куда), иначе только пункт назначения.
-- **«Компас»** (офлайн): рисует прямую линию user→destination (`GeoJSON
-  LineString`), вписывает её в кадр и показывает расстояние + азимут со
-  стрелкой-компасом (`DeviceOrientationEvent`, `webkitCompassHeading` на iOS).
-  Нужна позиция пользователя — если её нет, дёргает `onNeedGeo` (без блокировки
-  навигатора).
+- **«Открыть в навигаторе»** (`route.openInNavigator`) — работает **без
+  геолокации**. Deep-link в Яндекс Карты / Яндекс Навигатор / Google / Apple через
+  `navigatorUrl(id, lat, lng, from?)`. Аргумент `from` передаётся **только если есть
+  позиция пользователя** (`opts.getUserPos()`): тогда маршрут строится откуда→куда,
+  иначе навигатор сам берёт текущую позицию (только пункт назначения). Открытие:
+  `http(s)`-ссылки — в новой вкладке (`window.open`), кастомные схемы (`yandexnavi://`)
+  — через `window.location.href`.
+  - **Запоминание навигатора:** в первый раз (`hasChosenNavigator()` == false)
+    показывается инлайн-выбор навигатора (`route.pickNavigator`), выбор сохраняется
+    (`saveNavigator`) и сразу открывается. Дальше открывает выбранным навигатором
+    без вопросов. Кнопка **«Сменить навигатор»** (`route.changeNavigator`) скрыта,
+    пока выбор не сделан, и появляется после первого выбора.
+- **«Компас (офлайн)»** (`route.compass`) — **отдельная кнопка, требует
+  геолокацию**. Рисует прямую линию user→destination (`GeoJSON LineString`),
+  вписывает её в кадр (`fitBounds`) и показывает расстояние + азимут со
+  стрелкой-компасом (`DeviceOrientationEvent`, `webkitCompassHeading` на iOS). Если
+  позиции нет — дёргает `opts.onNeedGeo()` и выходит, **не** блокируя кнопку
+  навигатора. Компас стартует только по нажатию (не автоматически).
 
-Чистые билдеры ссылок `googleUrl`, `yandexUrl`, `yandexNaviUrl`, `appleUrl`,
-`navigatorUrl` покрыты тестами. Одна сессия компаса за раз; «Скрыть маршрут»
-сносит линию, панель и слушатель ориентации.
+Чистые билдеры ссылок `googleUrl`, `yandexUrl`, `yandexNaviUrl`, `appleUrl` и
+диспетчер `navigatorUrl` покрыты тестами. Одна сессия компаса за раз; «Скрыть
+маршрут» (`hideRoute`) сносит линию, панель и слушатель ориентации.
 
 ---
 
@@ -307,20 +345,20 @@ In-app синхронизация с `kabinka.by/api/v1`: список (`per_pag
 |---|---|
 | `scaffold.ts` | Синхронный DOM-каркас без MapLibre: пустой `#map`, тулбар (фильтры), кнопка настроек, host под sheet. Сюда первым делом рисуется список |
 | `shell.ts` | MapLibre-слой (ленивый чанк): `attachMap()` создаёт карту в `#map`, контролы, резолвит источник pmtiles |
-| `sheet.ts` | Мобайл: bottom-sheet с 3 состояниями + drag; десктоп: фиксированная левая панель, сворачивается (карта на весь экран) и открывается кнопкой «Показать список» |
+| `sheet.ts` | Мобайл: bottom-sheet с 3 состояниями (`collapsed`/`middle`/`expanded`) + drag. В **свёрнутом** состоянии контент списка скрыт (CSS `.sheet[data-state='collapsed'] .sheet-scroll { display: none }`) — видна чистая полоса с грабером и резюме «N мест» (`setSummary()`, заполняется из `main.ts` как `${n} ${t('list.placesWord', {n})}`, без обрезанных строк). Десктоп: фиксированная левая панель, сворачивается (карта на весь экран) и открывается кнопкой «Показать список» |
 | `list.ts` | Список локаций с расстояниями |
 | `card.ts` | Карточка локации: данные, фото, маршрут, шаринг |
 | `gallery.ts` | Карусель фото (стрелки ‹ ›, `draggable=false`) + полноэкранный просмотр + pinch/double-tap zoom + swipe |
 | `lazy-thumb.ts` | Ленивая загрузка превью через общий `IntersectionObserver` (rootMargin 200px): `src` ставится при входе в кадр |
 | `thumb-url.ts` | Резолвер превью: IDB-пакет (object URL) → dev-файл → онлайн-фолбэк |
-| `filters.ts` | Модальное окно фильтров; применяются по кнопке «Применить» (+ «Сбросить») |
+| `filters.ts` | Модальное окно фильтров; применяются **мгновенно** — каждое изменение контрола сразу зовёт `onApply`. Кнопки «Применить» нет: в футере только «Сбросить»; закрытие — ✕ / фон / Esc |
 | `settings.ts` | Настройки: язык UI/карты, тема (система/светлая/тёмная), навигатор, размер приложения, два офлайн-пакета, установка, обновление данных/карты |
 | `search.ts` | Поле поиска по названию и адресу |
 | `share.ts` | Web Share API + clipboard fallback, deep-link `#id=NN` |
 | `toast.ts` | Тосты + оверлей прогресса загрузки |
 | `modal.ts` | Лёгкий доступный модал/боттом-шит (body + footer, focus-trap, Esc/клик по фону) |
 | `format.ts` | `formatDistance`, `formatPrice`, `esc` (экранирование для innerHTML) |
-| `install-hint.ts` | Подсказка установки PWA (iOS-инструкция / `beforeinstallprompt`) + запрос `storage.persist()` |
+| `install-hint.ts` | Подсказка установки PWA. `detectPlatform()` → `ios`/`android`/`desktop` выбирает конкретные шаги (`install.stepsIos`/`stepsAndroid`/`stepsDesktop`). Где есть `beforeinstallprompt` (Android/desktop Chromium) — кнопка «Установить»; иначе (iOS и пр.) — пошаговая инструкция. Плюс разовый запрос `storage.persist()` |
 | `banner-stack.ts` | Общий нижний стек баннеров (установка + оффер пакета не перекрывают друг друга) |
 
 ---
