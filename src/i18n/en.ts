@@ -23,6 +23,10 @@ export const en = {
   'map.zoomOut': 'Zoom out',
   'map.myLocation': 'My location',
 
+  // ── Cluster / overlapping-point picker ──
+  'map.pickTitle': 'Several points here',
+  'map.pickClose': 'Close list',
+
   // ── Search ──
   'search.placeholder': 'Search by name or address',
   'search.label': 'Search',

@@ -26,6 +26,11 @@ export const ru = {
   'map.zoomOut': 'Уменьшить масштаб',
   'map.myLocation': 'Моё местоположение',
 
+  // ── Cluster / overlapping-point picker (shown when points share a spot and
+  //    can't be separated by zooming further) ──
+  'map.pickTitle': 'Несколько точек здесь',
+  'map.pickClose': 'Закрыть список',
+
   // ── Search ──
   'search.placeholder': 'Поиск по названию или адресу',
   'search.label': 'Поиск',

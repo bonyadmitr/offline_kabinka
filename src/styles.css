@@ -1268,6 +1268,107 @@ body.viewer-open {
 }
 
 /* ============================================================================
+   Point picker popup — shown when several points share a spot and can't be
+   pulled apart by zooming (co-located markers / cluster at max zoom).
+   Themed via CSS variables; large tap targets; scrolls when long.
+   ============================================================================ */
+.point-picker-popup .maplibregl-popup-content {
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+/* Popup arrow (tip) — recolour both the border edge and the fill so it matches
+   the themed surface instead of MapLibre's default white. */
+.point-picker-popup .maplibregl-popup-tip {
+  border-top-color: var(--surface);
+  border-bottom-color: var(--surface);
+}
+
+.point-picker-popup .maplibregl-popup-close-button {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-2);
+  border-radius: 8px;
+}
+
+.point-picker-popup .maplibregl-popup-close-button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.point-picker {
+  min-width: 200px;
+}
+
+.point-picker__title {
+  padding: 12px 40px 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.point-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.point-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.point-picker__item:hover {
+  background: var(--surface-2);
+}
+
+.point-picker__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.point-picker__dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--price-free);
+}
+
+.point-picker__dot.price-free { background: var(--price-free); }
+.point-picker__dot.price-paid { background: var(--price-paid); }
+.point-picker__dot.price-conditional { background: var(--price-conditional); }
+
+.point-picker__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================================
    Toolbar badge (active filter count)
    ============================================================================ */
 .toolbar-btn {
