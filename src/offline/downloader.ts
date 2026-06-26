@@ -32,10 +32,14 @@ const THUMBS_INDEX_URL = BASE_URL + 'thumbs/thumbs-index.json';
 const THUMBS_KEY = 'thumbs';
 const THUMBS_INDEX_KV = 'thumbsIndex';
 
-/** Fallback weight (bytes) for the map when its Content-Length is unknown. */
-const MAP_FALLBACK_BYTES = 12 * 1024 * 1024;
-/** Packed thumbnails are ~8.3 MB; used when Content-Length is missing. */
-const THUMBS_FALLBACK_BYTES = 8.3 * 1024 * 1024;
+/**
+ * Fallback weights (bytes) used when a Content-Length / manifest probe fails.
+ * These track the real published assets: the Minsk basemap (~31 MB) and the
+ * packed thumbnails (~8.3 MB). Keep them roughly in sync with the server.
+ */
+const MAP_FALLBACK_BYTES = 31 * 1024 * 1024;
+/** Packed thumbnails are ~8.3 MB; used when the size is otherwise unknown. */
+const THUMBS_FALLBACK_BYTES = 8_732_579;
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 
@@ -256,12 +260,57 @@ export async function loadThumbsPackFromIDB(): Promise<void> {
 }
 
 /**
- * Rough size of the not-yet-downloaded part of the offline package, in bytes,
- * for the install offer ("~N MB"). Uses fallbacks; no network probe.
+ * Real size of the map archive, in bytes: read `bytes` from map-version.json.
+ * Falls back to MAP_FALLBACK_BYTES on any network/parse/404 failure (offline).
+ */
+async function probeMapBytes(): Promise<number> {
+  try {
+    const res = await fetch(MAP_VERSION_URL);
+    if (!res.ok) return MAP_FALLBACK_BYTES;
+    const manifest = (await res.json()) as { bytes?: number };
+    return typeof manifest.bytes === 'number' && manifest.bytes > 0
+      ? manifest.bytes
+      : MAP_FALLBACK_BYTES;
+  } catch {
+    return MAP_FALLBACK_BYTES;
+  }
+}
+
+/**
+ * Real size of thumbs.bin, in bytes: a cheap HEAD for its Content-Length.
+ * Falls back to THUMBS_FALLBACK_BYTES on any failure (offline / no header).
+ */
+async function probeThumbsBytes(): Promise<number> {
+  try {
+    const res = await fetch(THUMBS_BIN_URL, { method: 'HEAD' });
+    const len = res.ok ? res.headers.get('Content-Length') : null;
+    const n = len ? Number(len) : 0;
+    return n > 0 ? n : THUMBS_FALLBACK_BYTES;
+  } catch {
+    return THUMBS_FALLBACK_BYTES;
+  }
+}
+
+/**
+ * Real total size of the full offline package (map + thumbnails), in bytes, for
+ * the "Download / Delete (N MB)" labels. Probes the server manifest + a HEAD;
+ * each component soft-falls back to a known value when offline.
+ */
+export async function packageBytes(): Promise<number> {
+  const [map, thumbs] = await Promise.all([probeMapBytes(), probeThumbsBytes()]);
+  return map + thumbs;
+}
+
+/**
+ * Real size of the not-yet-downloaded part of the offline package, in bytes,
+ * for the install offer ("N MB"). Probes only the missing components; soft
+ * fallback to known values when offline.
  */
 export async function pendingPackageBytes(): Promise<number> {
+  const needMap = (await blobSize(PMTILES_KEY)) === 0;
+  const needThumbs = (await blobSize(THUMBS_KEY)) === 0;
   let bytes = 0;
-  if ((await blobSize(PMTILES_KEY)) === 0) bytes += MAP_FALLBACK_BYTES;
-  if ((await blobSize(THUMBS_KEY)) === 0) bytes += THUMBS_FALLBACK_BYTES;
+  if (needMap) bytes += await probeMapBytes();
+  if (needThumbs) bytes += await probeThumbsBytes();
   return bytes;
 }
