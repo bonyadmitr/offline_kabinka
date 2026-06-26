@@ -9,3 +9,4 @@ public/thumbs/thumbs-index.json
 .osm-cache/
 test-results/
 playwright-report/
+scripts/.device_id
