@@ -23,6 +23,15 @@ import {
   saveNavigator,
 } from './core/settings';
 import { toUserMessage } from './core/errors';
+import {
+  loadThumbsPackFromIDB,
+  ensureOfflinePackage,
+  pendingPackageBytes,
+} from './offline/downloader';
+import { blobSize } from './offline/blobstore';
+import { PMTILES_KEY } from './offline/pmtiles-source';
+import { toast, progressOverlay } from './ui/toast';
+import { initInstallHint } from './ui/install-hint';
 
 interface AppState {
   locations: Location[];
@@ -45,6 +54,10 @@ async function bootstrap(): Promise<void> {
   if (import.meta.env.PROD) {
     void import('./offline/sw-register').then((m) => m.registerServiceWorker());
   }
+
+  // If the thumbnail pack is already in IndexedDB, hydrate it now so list/card
+  // thumbnails resolve from the offline bundle. Best-effort; never blocks boot.
+  void loadThumbsPackFromIDB().catch(() => {});
 
   const store = new Store<AppState>({
     locations: [],
@@ -304,6 +317,84 @@ async function bootstrap(): Promise<void> {
   };
   if (map.isStyleLoaded()) initMarkers();
   else map.once('load', initMarkers);
+
+  // ── Install hint (iOS banner / beforeinstallprompt) + persistent storage ──
+  initInstallHint();
+
+  // ── Offer the offline package once, if not yet downloaded and online ──
+  void maybeOfferOfflinePackage(() => {
+    // Pack is now hydrated — redraw the list (and any open card) so thumbnails
+    // upgrade from the online fallback to the offline bundle's object URLs.
+    drawList();
+    if (store.get().selectedId != null) drawCard(store.get().selectedId!);
+  });
+}
+
+/**
+ * If the map blob isn't stored yet and we're online, offer to download the
+ * offline package. Shown once per session (a dismissable toast-style banner).
+ * Running the download opens a progress overlay with retry-on-error.
+ */
+async function maybeOfferOfflinePackage(onDone: () => void): Promise<void> {
+  try {
+    if ((await blobSize(PMTILES_KEY)) > 0) return; // already have the map
+  } catch {
+    return;
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+  const mb = Math.round((await pendingPackageBytes()) / (1024 * 1024));
+
+  const run = (): void => {
+    const overlay = progressOverlay();
+    const start = (): void => {
+      ensureOfflinePackage((p, label) => overlay.update(p, label))
+        .then(() => {
+          overlay.close();
+          toast(t('offline.done'));
+          onDone();
+        })
+        .catch((e) => {
+          overlay.error(toUserMessage(e), { onRetry: start });
+        });
+    };
+    start();
+  };
+
+  showOfferBanner(t('offline.offer', { n: mb }), run);
+}
+
+/** A dismissable bottom banner offering an action (download). */
+function showOfferBanner(message: string, onAccept: () => void): void {
+  document.querySelector('.offer-banner')?.remove();
+
+  const banner = document.createElement('div');
+  banner.className = 'offer-banner';
+  banner.setAttribute('role', 'region');
+
+  const text = document.createElement('span');
+  text.className = 'offer-text';
+  text.textContent = message;
+
+  const accept = document.createElement('button');
+  accept.type = 'button';
+  accept.className = 'btn btn-primary offer-accept';
+  accept.textContent = t('offline.offerDownload');
+  accept.addEventListener('click', () => {
+    banner.remove();
+    onAccept();
+  });
+
+  const later = document.createElement('button');
+  later.type = 'button';
+  later.className = 'offer-later';
+  later.setAttribute('aria-label', t('offline.offerLater'));
+  later.textContent = t('offline.offerLater');
+  later.addEventListener('click', () => banner.remove());
+
+  banner.append(text, accept, later);
+  document.body.appendChild(banner);
+  requestAnimationFrame(() => banner.classList.add('offer-visible'));
 }
 
 bootstrap().catch((e) => {
