@@ -4,11 +4,20 @@ import { Store } from './core/store';
 import { loadLocations } from './data/repository';
 import { applyFilters, defaultFilter } from './data/filter';
 import { addMarkers, updateMarkers } from './map/markers';
+import { setMapLanguage } from './map/map';
+import { buildStyle } from './map/style';
 import { getUserPosition } from './map/controls';
-import { mountShell } from './ui/shell';
+import { mountShell, PMTILES_URL } from './ui/shell';
 import { renderList, type UserPos } from './ui/list';
 import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
+import { openSettings, type SettingsCtx, type Radius, type NavigatorId } from './ui/settings';
+import {
+  loadRadius,
+  saveRadius,
+  loadNavigator,
+  saveNavigator,
+} from './core/settings';
 import { toUserMessage } from './core/errors';
 
 interface AppState {
@@ -19,6 +28,8 @@ interface AppState {
   uiLang: 'ru' | 'en';
   mapLang: 'ru' | 'en';
   theme: 'light' | 'dark';
+  radius: Radius;
+  navigator: NavigatorId;
 }
 
 async function bootstrap(): Promise<void> {
@@ -33,6 +44,8 @@ async function bootstrap(): Promise<void> {
     uiLang: 'ru',
     mapLang: 'ru',
     theme: 'light',
+    radius: loadRadius(),
+    navigator: loadNavigator(),
   });
 
   // ── Shell + map ──
@@ -94,6 +107,58 @@ async function bootstrap(): Promise<void> {
     if (!mapReady) return;
     updateMarkers(map, store.get().filtered, onSelect);
   };
+
+  // Re-add the points source/layers after a style swap. If the source somehow
+  // survived (it normally won't), updateMarkers refreshes it instead of throwing.
+  const reAddMarkers = (): void => {
+    try {
+      if (map.getSource('points')) updateMarkers(map, store.get().filtered, onSelect);
+      else addMarkers(map, store.get().filtered, onSelect);
+    } catch (e) {
+      console.warn('[markers] re-add failed', e);
+    }
+  };
+
+  // ── Toolbar: settings button ──
+  const settingsBtn = shell.toolbar.querySelector<HTMLButtonElement>('[data-act="settings"]');
+  const buildSettingsCtx = (): SettingsCtx => {
+    const s = store.get();
+    return {
+      uiLang: s.uiLang,
+      mapLang: s.mapLang,
+      theme: s.theme,
+      radius: s.radius,
+      navigator: s.navigator,
+      setUiLang: (l) => {
+        // Actual string swap is WU5b; for now persist + rerender current views.
+        store.set({ uiLang: l });
+        drawList();
+        if (store.get().selectedId != null) drawCard(store.get().selectedId!);
+      },
+      setMapLang: (l) => {
+        store.set({ mapLang: l });
+        setMapLanguage(map, l);
+      },
+      setTheme: (t) => {
+        store.set({ theme: t });
+        root.classList.toggle('theme-dark', t === 'dark');
+        // setStyle() drops our custom point source/layers. Rebuild the style, then
+        // re-add markers once the new style is live (one-shot styledata listener).
+        // If the map was never ready, initMarkers()'s 'load' handler covers it.
+        if (mapReady) map.once('styledata', reAddMarkers);
+        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: t, pmtilesUrl: PMTILES_URL }));
+      },
+      setRadius: (km) => {
+        store.set({ radius: km });
+        saveRadius(km);
+      },
+      setNavigator: (id) => {
+        store.set({ navigator: id });
+        saveNavigator(id);
+      },
+    };
+  };
+  settingsBtn?.addEventListener('click', () => openSettings(buildSettingsCtx()));
 
   let prevFilter = store.get().filter;
   let prevSelected = store.get().selectedId;

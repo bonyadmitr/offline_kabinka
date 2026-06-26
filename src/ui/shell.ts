@@ -12,6 +12,9 @@ export interface Shell {
   toolbar: HTMLElement;
 }
 
+/** Single source of truth for the PMTiles URL (used by shell + style rebuilds). */
+export const PMTILES_URL = import.meta.env.BASE_URL + 'map/minsk.pmtiles';
+
 export interface ShellOpts {
   lang: 'ru' | 'en';
   theme: 'light' | 'dark';
@@ -47,8 +50,7 @@ export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
 
   // Create the map. Guard so a missing PMTiles file never crashes the app.
   registerPmtiles();
-  const pmtilesUrl = import.meta.env.BASE_URL + 'map/minsk.pmtiles';
-  const map = createMap(mapEl, buildStyle({ lang: opts.lang, theme: opts.theme, pmtilesUrl }));
+  const map = createMap(mapEl, buildStyle({ lang: opts.lang, theme: opts.theme, pmtilesUrl: PMTILES_URL }));
 
   // Surface (but do not throw on) map errors — empty tiles in dev are fine.
   map.on('error', (e) => {
