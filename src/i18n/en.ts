@@ -57,7 +57,6 @@ export const en = {
   'card.howToFind': 'How to find',
   'card.comments': 'Comments',
   'card.guest': 'Guest',
-  'card.reportError': 'Report a problem',
   'card.route': 'Route',
   'card.share': 'Share',
 

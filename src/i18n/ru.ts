@@ -75,7 +75,6 @@ export const ru = {
   'card.howToFind': 'Как найти',
   'card.comments': 'Комментарии',
   'card.guest': 'Гость',
-  'card.reportError': 'Сообщить об ошибке',
   'card.route': 'Маршрут',
   'card.share': 'Поделиться',
 

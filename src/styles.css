@@ -789,13 +789,6 @@ img {
   color: var(--text);
 }
 
-.card-report {
-  align-self: center;
-  color: var(--text-2);
-  font-size: 13px;
-  text-decoration: underline;
-}
-
 /* ============================================================================
    Gallery (in-card carousel)
    ============================================================================ */

@@ -21,7 +21,6 @@ const DAY_KEYS: I18nKey[] = [
   'day.sat',
   'day.sun',
 ];
-const REPORT_URL = 'https://kabinka.by/map';
 
 /** Render the full location detail card into `container`. */
 export function renderCard(container: HTMLElement, loc: Location, opts: CardOpts): void {
@@ -67,7 +66,6 @@ function buildBodyHtml(loc: Location): string {
      </button>`,
     descriptionHtml(loc),
     commentsHtml(loc.comments),
-    `<a class="card-report" href="${REPORT_URL}" target="_blank" rel="noopener noreferrer">${esc(t('card.reportError'))}</a>`,
     `<button type="button" class="btn btn-secondary" data-act="share">
        <span aria-hidden="true">↗</span> ${esc(t('card.share'))}
      </button>`,
