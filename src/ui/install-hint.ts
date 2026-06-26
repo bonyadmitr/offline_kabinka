@@ -40,6 +40,27 @@ export function isIos(): boolean {
   return iOSDevice || iPadOS;
 }
 
+export type InstallPlatform = 'ios' | 'android' | 'desktop';
+
+/** Coarse platform bucket for picking the right install instructions. */
+export function detectPlatform(): InstallPlatform {
+  if (isIos()) return 'ios';
+  if (/Android/.test(navigator.userAgent || '')) return 'android';
+  return 'desktop';
+}
+
+/** i18n key for the manual install steps on the current platform. */
+function installStepsKey(): 'install.stepsIos' | 'install.stepsAndroid' | 'install.stepsDesktop' {
+  switch (detectPlatform()) {
+    case 'ios':
+      return 'install.stepsIos';
+    case 'android':
+      return 'install.stepsAndroid';
+    default:
+      return 'install.stepsDesktop';
+  }
+}
+
 function isDismissed(): boolean {
   try {
     return localStorage.getItem(DISMISS_KEY) === '1';
@@ -126,7 +147,8 @@ function showBanner(): void {
   });
 
   if (canPromptInstall()) {
-    // Android / desktop: descriptive text + a working Install button.
+    // Android / desktop with a captured prompt: descriptive text + a working
+    // Install button (the platform-specific steps are the settings fallback).
     text.textContent = t('install.bannerText');
     const installBtn = document.createElement('button');
     installBtn.type = 'button';
@@ -139,8 +161,9 @@ function showBanner(): void {
     });
     banner.append(text, installBtn, dismiss);
   } else {
-    // iOS / no prompt: textual instruction only (no non-working button).
-    text.textContent = t('install.bannerIos');
+    // No native prompt (iOS, or a browser that won't fire beforeinstallprompt):
+    // a short lead-in + the concrete steps for this platform.
+    text.textContent = `${t('install.bannerManual')} ${t(installStepsKey())}`;
     banner.append(text, dismiss);
   }
 
@@ -149,9 +172,10 @@ function showBanner(): void {
 }
 
 /**
- * Render install help into a container (used by the settings modal). Shows the
- * iOS steps, or an Install button when a native prompt is available, or generic
- * guidance otherwise.
+ * Render install help into a container (used by the settings modal). Shows a
+ * working Install button when a native prompt is available; otherwise the
+ * concrete step-by-step instructions for the current platform (iOS / Android /
+ * desktop). When a prompt is available we still append the steps as a fallback.
  */
 export function renderInstallHelp(container: HTMLElement): void {
   container.replaceChildren();
@@ -163,13 +187,10 @@ export function renderInstallHelp(container: HTMLElement): void {
     btn.textContent = t('settings.installBtn');
     btn.addEventListener('click', () => void promptInstall());
     container.appendChild(btn);
-    return;
   }
 
   const p = document.createElement('p');
   p.className = 'install-help-text';
-  p.textContent = isIos()
-    ? t('settings.installIosSteps')
-    : t('settings.installUnavailable');
+  p.textContent = t(installStepsKey());
   container.appendChild(p);
 }

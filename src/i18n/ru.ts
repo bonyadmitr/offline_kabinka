@@ -206,10 +206,12 @@ export const ru = {
   'settings.offlineMapDeleted': 'Карта офлайн удалена. Карта работает при интернете.',
   'settings.offlineThumbsDeleted': 'Фото-превью офлайн удалены.',
   'settings.installTitle': 'Как установить приложение',
-  'settings.installIosSteps': 'Нажмите «Поделиться», затем «На экран „Домой“».',
   'settings.installBtn': 'Установить',
-  'settings.installUnavailable':
-    'Откройте сайт в браузере и добавьте на главный экран через меню браузера.',
+  // Platform-specific install steps (shared by the banner + the settings help).
+  'install.stepsIos': 'Нажмите «Поделиться» (квадрат со стрелкой ↑) внизу → «На экран „Домой“».',
+  'install.stepsAndroid': 'Меню «⋮» вверху справа → «Установить приложение».',
+  'install.stepsDesktop':
+    'В адресной строке — значок установки «⊞», или Меню «⋮» → «Установить…».',
 
   // ── In-app updates (WU8) ──
   'update.dataTitle': 'Обновление данных',
@@ -225,7 +227,9 @@ export const ru = {
 
   // ── Install hint banner ──
   'install.bannerText': 'Установите приложение — карта и места будут работать офлайн',
-  'install.bannerIos': 'Установите приложение: Поделиться → На экран „Домой“',
+  // Short lead-in shown before the platform-specific steps when there is no
+  // native install prompt (iOS, and desktop/Android without beforeinstallprompt).
+  'install.bannerManual': 'Установите приложение, чтобы пользоваться офлайн:',
   'install.bannerBtn': 'Установить',
   'install.dismiss': 'Закрыть',
 

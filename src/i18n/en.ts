@@ -182,10 +182,12 @@ export const en = {
   'settings.offlineMapDeleted': 'Offline map deleted. The map needs the internet now.',
   'settings.offlineThumbsDeleted': 'Offline photo thumbnails deleted.',
   'settings.installTitle': 'How to install the app',
-  'settings.installIosSteps': 'Tap "Share", then "Add to Home Screen".',
   'settings.installBtn': 'Install',
-  'settings.installUnavailable':
-    'Open the site in a browser and add it to your home screen from the browser menu.',
+  // Platform-specific install steps (shared by the banner + the settings help).
+  'install.stepsIos': 'Tap "Share" (square with an ↑ arrow) at the bottom → "Add to Home Screen".',
+  'install.stepsAndroid': 'Menu "⋮" (top right) → "Install app".',
+  'install.stepsDesktop':
+    'Click the install icon "⊞" in the address bar, or Menu "⋮" → "Install…".',
 
   // ── In-app updates (WU8) ──
   'update.dataTitle': 'Updating data',
@@ -199,7 +201,9 @@ export const en = {
 
   // ── Install hint banner ──
   'install.bannerText': 'Install the app — the map and places work offline',
-  'install.bannerIos': 'Install the app: Share → Add to Home Screen',
+  // Short lead-in shown before the platform-specific steps when there is no
+  // native install prompt (iOS, and desktop/Android without beforeinstallprompt).
+  'install.bannerManual': 'Install the app to use it offline:',
   'install.bannerBtn': 'Install',
   'install.dismiss': 'Dismiss',
 
