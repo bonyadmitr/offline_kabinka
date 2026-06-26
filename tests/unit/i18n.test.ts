@@ -17,9 +17,9 @@ test('ru has all en keys (no orphans)', () => {
 test('t resolves the active language and switches', () => {
   setLang('ru');
   expect(getLang()).toBe('ru');
-  expect(t('common.apply')).toBe('Применить');
+  expect(t('common.reset')).toBe('Сбросить');
   setLang('en');
-  expect(t('common.apply')).toBe('Apply');
+  expect(t('common.reset')).toBe('Reset');
   setLang('ru'); // restore default for other tests
 });
 
