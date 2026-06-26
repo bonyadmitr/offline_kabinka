@@ -2,6 +2,7 @@ node_modules
 dist
 *.pmtiles
 public/map/
+public/thumbs/*.jpg
 public/thumbs/thumbs.bin
 public/thumbs/thumbs-index.json
 .osm-cache/
