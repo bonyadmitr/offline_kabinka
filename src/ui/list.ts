@@ -3,6 +3,7 @@ import { haversine } from '../core/geo';
 import { isOpenNow } from '../data/open-now';
 import { thumbUrl } from './thumb-url';
 import { formatDistance, formatPrice, esc } from './format';
+import { t } from '../i18n';
 
 export interface UserPos {
   lat: number;
@@ -41,13 +42,13 @@ export function renderList(
 
   const header = document.createElement('div');
   header.className = 'list-header';
-  header.innerHTML = `<span class="list-count">${sorted.length}</span><span class="list-count-label">${plural(sorted.length)}</span>`;
+  header.innerHTML = `<span class="list-count">${sorted.length}</span><span class="list-count-label">${t('list.placesWord', { n: sorted.length })}</span>`;
   container.appendChild(header);
 
   if (sorted.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'list-empty';
-    empty.textContent = 'Ничего не найдено';
+    empty.textContent = t('list.empty');
     container.appendChild(empty);
     return;
   }
@@ -60,14 +61,6 @@ export function renderList(
   }
 
   container.appendChild(ul);
-}
-
-function plural(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'место';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'места';
-  return 'мест';
 }
 
 function renderRow(
@@ -97,7 +90,7 @@ function renderRow(
       <div class="row-title">${esc(loc.title)}</div>
       ${loc.address ? `<div class="row-address">${esc(loc.address)}</div>` : ''}
       <div class="row-meta">
-        <span class="badge ${open ? 'badge-open' : 'badge-closed'}">${open ? 'Открыто' : 'Закрыто'}</span>
+        <span class="badge ${open ? 'badge-open' : 'badge-closed'}">${open ? t('list.open') : t('list.closed')}</span>
         ${distance ? `<span class="row-dist">${esc(distance)}</span>` : ''}
         <span class="row-price ${priceClass}">${esc(formatPrice(loc))}</span>
       </div>

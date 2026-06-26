@@ -8,6 +8,8 @@
 // role="dialog", aria-modal, labelled by the title, focus moved inside on open
 // and restored on close, background scroll locked.
 
+import { t } from '../i18n';
+
 export interface Modal {
   /** The scrollable body element — render your content here. */
   body: HTMLElement;
@@ -49,7 +51,7 @@ export function openModal(opts: ModalOpts): Modal {
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'modal-close';
-  closeBtn.setAttribute('aria-label', 'Закрыть');
+  closeBtn.setAttribute('aria-label', t('common.close'));
   closeBtn.innerHTML = '<span aria-hidden="true">✕</span>';
 
   header.append(h, closeBtn);

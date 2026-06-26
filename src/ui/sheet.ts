@@ -8,6 +8,8 @@
 // The sheet owns two child views — `listView` and `cardView` — and toggles between
 // them. Callers render into those elements and call showList()/showCard().
 
+import { t } from '../i18n';
+
 export type SheetState = 'collapsed' | 'middle' | 'expanded';
 
 export interface Sheet {
@@ -41,12 +43,12 @@ function isMobile(): boolean {
 export function createSheet(parent: HTMLElement): Sheet {
   const root = document.createElement('section');
   root.className = 'sheet';
-  root.setAttribute('aria-label', 'Список туалетов');
+  root.setAttribute('aria-label', t('sheet.label'));
 
   const handle = document.createElement('div');
   handle.className = 'sheet-handle';
   handle.setAttribute('role', 'button');
-  handle.setAttribute('aria-label', 'Перетащите, чтобы изменить размер');
+  handle.setAttribute('aria-label', t('sheet.resize'));
   handle.tabIndex = 0;
   handle.innerHTML = `<span class="sheet-grabber"></span>`;
 

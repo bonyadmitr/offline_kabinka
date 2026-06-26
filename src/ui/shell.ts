@@ -4,6 +4,7 @@ import { buildStyle } from '../map/style';
 import { addZoomControls, addGeolocate } from '../map/controls';
 import { createSheet, type Sheet } from './sheet';
 import { toUserMessage } from '../core/errors';
+import { t } from '../i18n';
 
 export interface Shell {
   map: maplibregl.Map;
@@ -27,7 +28,9 @@ export interface ShellOpts {
  */
 export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
   root.classList.add('app-root');
-  root.classList.toggle('theme-dark', opts.theme === 'dark');
+  // Theme class goes on <html> (not #app) so the --bg token also reaches <body>,
+  // keeping the iOS overscroll/rubber-band area the right colour.
+  document.documentElement.classList.toggle('theme-dark', opts.theme === 'dark');
 
   // Map container fills the screen behind the panel.
   const mapEl = document.createElement('div');
@@ -38,8 +41,8 @@ export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
   // Toolbar slot (filters/settings placeholders wired in WU5).
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
-  toolbar.appendChild(makePlaceholderBtn('Фильтры', 'filters'));
-  toolbar.appendChild(makePlaceholderBtn('⚙️', 'settings'));
+  toolbar.appendChild(makeToolbarBtn(t('toolbar.filters'), 'filters', t('toolbar.filters')));
+  toolbar.appendChild(makeToolbarBtn('⚙️', 'settings', t('toolbar.settings')));
   root.appendChild(toolbar);
 
   // Panel host for the sheet.
@@ -65,12 +68,12 @@ export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
   return { map, sheet, toolbar };
 }
 
-function makePlaceholderBtn(label: string, act: string): HTMLButtonElement {
+function makeToolbarBtn(label: string, act: string, ariaLabel: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'toolbar-btn';
   btn.dataset.act = act; // WU5 hooks attach here
   btn.textContent = label;
-  btn.setAttribute('aria-label', act === 'settings' ? 'Настройки' : label);
+  btn.setAttribute('aria-label', ariaLabel);
   return btn;
 }

@@ -1,6 +1,7 @@
 import { openModal } from './modal';
 import { getDeviceId } from '../core/device';
 import { esc } from './format';
+import { t } from '../i18n';
 
 export type Lang = 'ru' | 'en';
 export type Theme = 'light' | 'dark';
@@ -23,30 +24,31 @@ export interface SettingsCtx {
   setNavigator(id: NavigatorId): void;
 }
 
-const NAV_OPTIONS: Array<{ id: NavigatorId; label: string }> = [
-  { id: 'yandex_maps', label: 'Яндекс Карты' },
-  { id: 'yandex_navi', label: 'Яндекс Навигатор' },
-  { id: 'google', label: 'Google' },
-  { id: 'apple', label: 'Apple' },
+// Built per-open so labels reflect the active language.
+const navOptions = (): Array<{ id: NavigatorId; label: string }> => [
+  { id: 'yandex_maps', label: t('settings.navYandexMaps') },
+  { id: 'yandex_navi', label: t('settings.navYandexNavi') },
+  { id: 'google', label: t('settings.navGoogle') },
+  { id: 'apple', label: t('settings.navApple') },
 ];
 
 const RADIUS_OPTIONS: Radius[] = [1, 2, 5, 20];
 
 /** Placeholder actions activated in WU7/WU8. */
-const PLACEHOLDERS: Array<{ act: string; label: string }> = [
-  { act: 'refresh-data', label: 'Обновить данные' },
-  { act: 'refresh-map', label: 'Обновить карту' },
-  { act: 'app-size', label: 'Размер приложения' },
-  { act: 'clear-cache', label: 'Очистить кеш' },
-  { act: 'install', label: 'Как установить приложение' },
+const placeholders = (): Array<{ act: string; label: string }> => [
+  { act: 'refresh-data', label: t('settings.refreshData') },
+  { act: 'refresh-map', label: t('settings.refreshMap') },
+  { act: 'app-size', label: t('settings.appSize') },
+  { act: 'clear-cache', label: t('settings.clearCache') },
+  { act: 'install', label: t('settings.install') },
 ];
 
 export function openSettings(ctx: SettingsCtx): void {
-  const modal = openModal({ title: 'Настройки' });
+  const modal = openModal({ title: t('settings.title') });
 
   modal.body.innerHTML = `
     <div class="set-group">
-      <div class="set-label">Язык интерфейса</div>
+      <div class="set-label">${esc(t('settings.uiLanguage'))}</div>
       ${segment('uiLang', [
         { value: 'ru', label: 'RU' },
         { value: 'en', label: 'EN' },
@@ -54,7 +56,7 @@ export function openSettings(ctx: SettingsCtx): void {
     </div>
 
     <div class="set-group">
-      <div class="set-label">Язык карты</div>
+      <div class="set-label">${esc(t('settings.mapLanguage'))}</div>
       ${segment('mapLang', [
         { value: 'ru', label: 'RU' },
         { value: 'en', label: 'EN' },
@@ -63,7 +65,7 @@ export function openSettings(ctx: SettingsCtx): void {
 
     <div class="set-group">
       <label class="filter-toggle">
-        <span class="filter-toggle-label"><span aria-hidden="true">🌙</span> Тёмная тема</span>
+        <span class="filter-toggle-label"><span aria-hidden="true">🌙</span> ${esc(t('settings.darkTheme'))}</span>
         <span class="switch">
           <input type="checkbox" data-toggle="theme" ${ctx.theme === 'dark' ? 'checked' : ''} />
           <span class="switch-track" aria-hidden="true"></span>
@@ -72,18 +74,18 @@ export function openSettings(ctx: SettingsCtx): void {
     </div>
 
     <div class="set-group">
-      <div class="set-label">Радиус списка</div>
+      <div class="set-label">${esc(t('settings.listRadius'))}</div>
       ${segment(
         'radius',
-        RADIUS_OPTIONS.map((km) => ({ value: String(km), label: `${km} км` })),
+        RADIUS_OPTIONS.map((km) => ({ value: String(km), label: t('settings.radiusKm', { km }) })),
         String(ctx.radius),
       )}
     </div>
 
     <div class="set-group">
-      <div class="set-label">Навигатор по умолчанию</div>
-      <div class="set-radio-list" role="radiogroup" aria-label="Навигатор по умолчанию">
-        ${NAV_OPTIONS.map(
+      <div class="set-label">${esc(t('settings.defaultNavigator'))}</div>
+      <div class="set-radio-list" role="radiogroup" aria-label="${esc(t('settings.defaultNavigator'))}">
+        ${navOptions().map(
           (o) => `
           <label class="set-radio">
             <input type="radio" name="set-navigator" value="${esc(o.id)}" data-nav ${
@@ -97,13 +99,13 @@ export function openSettings(ctx: SettingsCtx): void {
     </div>
 
     <div class="set-group">
-      <div class="set-label">Скоро</div>
+      <div class="set-label">${esc(t('settings.soonGroup'))}</div>
       <div class="set-actions">
-        ${PLACEHOLDERS.map(
+        ${placeholders().map(
           (p) => `
           <button type="button" class="set-action" data-act="${esc(p.act)}" disabled>
             <span>${esc(p.label)}</span>
-            <span class="set-soon">скоро</span>
+            <span class="set-soon">${esc(t('common.soon'))}</span>
           </button>`,
         ).join('')}
       </div>
@@ -111,11 +113,11 @@ export function openSettings(ctx: SettingsCtx): void {
 
     <div class="set-group set-about">
       <div class="set-meta">
-        <span class="set-meta-key">Device ID</span>
+        <span class="set-meta-key">${esc(t('settings.deviceId'))}</span>
         <code class="set-device-id">${esc(getDeviceId())}</code>
       </div>
       <div class="set-meta">
-        <span class="set-meta-key">Версия</span>
+        <span class="set-meta-key">${esc(t('settings.version'))}</span>
         <span>${esc(APP_VERSION)}</span>
       </div>
     </div>

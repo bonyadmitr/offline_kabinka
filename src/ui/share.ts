@@ -1,4 +1,5 @@
 import type { Location } from '../core/types';
+import { t } from '../i18n';
 
 /** Build the deep-link URL for a location: <origin><base>#id=<id>. */
 export function shareUrl(loc: Location): string {
@@ -29,7 +30,7 @@ export async function shareLocation(loc: Location): Promise<void> {
   }
 
   await copyToClipboard(url);
-  showToast('Ссылка скопирована');
+  showToast(t('share.copied'));
 }
 
 async function copyToClipboard(text: string): Promise<void> {

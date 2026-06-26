@@ -1,5 +1,6 @@
 import type { Location, Photo } from '../core/types';
 import { thumbUrl } from './thumb-url';
+import { t } from '../i18n';
 
 // Full-size originals live on the public API. We deliberately load them with a plain
 // <img> (no headers) so the browser issues a simple GET with no CORS preflight.
@@ -27,7 +28,7 @@ export function renderGallery(container: HTMLElement, location: Location): void 
   if (photos.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'gallery-empty';
-    empty.innerHTML = `<span class="gallery-empty-icon">📷</span><span>Фотографии отсутствуют</span>`;
+    empty.innerHTML = `<span class="gallery-empty-icon">📷</span><span>${t('gallery.empty')}</span>`;
     container.appendChild(empty);
     return;
   }
@@ -42,7 +43,7 @@ export function renderGallery(container: HTMLElement, location: Location): void 
     const slide = document.createElement('button');
     slide.type = 'button';
     slide.className = 'gallery-slide';
-    slide.setAttribute('aria-label', `Фото ${i + 1} из ${photos.length}`);
+    slide.setAttribute('aria-label', t('gallery.photoOf', { i: i + 1, n: photos.length }));
 
     const img = document.createElement('img');
     img.loading = 'lazy';
@@ -106,7 +107,7 @@ export function openViewer(location: Location, start: number): void {
 
   const fallback = document.createElement('div');
   fallback.className = 'viewer-fallback';
-  fallback.innerHTML = `<span class="gallery-empty-icon">📷</span><span>Фото недоступно (IMG-01)</span>`;
+  fallback.innerHTML = `<span class="gallery-empty-icon">📷</span><span>${t('viewer.unavailable')}</span>`;
   fallback.style.display = 'none';
 
   stage.appendChild(img);
@@ -118,19 +119,19 @@ export function openViewer(location: Location, start: number): void {
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'viewer-btn viewer-close';
-  closeBtn.setAttribute('aria-label', 'Закрыть');
+  closeBtn.setAttribute('aria-label', t('common.close'));
   closeBtn.textContent = '✕';
 
   const prevBtn = document.createElement('button');
   prevBtn.type = 'button';
   prevBtn.className = 'viewer-btn viewer-prev';
-  prevBtn.setAttribute('aria-label', 'Предыдущее фото');
+  prevBtn.setAttribute('aria-label', t('viewer.prev'));
   prevBtn.innerHTML = '‹';
 
   const nextBtn = document.createElement('button');
   nextBtn.type = 'button';
   nextBtn.className = 'viewer-btn viewer-next';
-  nextBtn.setAttribute('aria-label', 'Следующее фото');
+  nextBtn.setAttribute('aria-label', t('viewer.next'));
   nextBtn.innerHTML = '›';
 
   overlay.append(stage, counter, closeBtn, prevBtn, nextBtn);

@@ -2,18 +2,20 @@ import type { FilterState, LayoutType, PriceType, Tag, Location } from '../core/
 import { defaultFilter } from '../data/filter';
 import { openModal } from './modal';
 import { esc } from './format';
+import { t } from '../i18n';
 
-const LAYOUT_LABELS: Array<{ value: LayoutType; label: string }> = [
-  { value: 'block', label: 'Общий блок' },
-  { value: 'separate_male', label: 'Мужской' },
-  { value: 'separate_female', label: 'Женский' },
-  { value: 'unisex', label: 'Совмещённый' },
+// Built per-open (not module-level constants) so labels reflect the active language.
+const layoutLabels = (): Array<{ value: LayoutType; label: string }> => [
+  { value: 'block', label: t('filters.layoutBlock') },
+  { value: 'separate_male', label: t('filters.layoutMale') },
+  { value: 'separate_female', label: t('filters.layoutFemale') },
+  { value: 'unisex', label: t('filters.layoutUnisex') },
 ];
 
-const PRICE_LABELS: Array<{ value: PriceType; label: string; dot: string }> = [
-  { value: 'free', label: 'Бесплатно', dot: 'green' },
-  { value: 'conditional_free', label: 'Условно-бесплатно', dot: 'blue' },
-  { value: 'paid', label: 'Платно', dot: 'purple' },
+const priceLabels = (): Array<{ value: PriceType; label: string; dot: string }> => [
+  { value: 'free', label: t('filters.priceFree'), dot: 'green' },
+  { value: 'conditional_free', label: t('filters.priceConditional'), dot: 'blue' },
+  { value: 'paid', label: t('filters.pricePaid'), dot: 'purple' },
 ];
 
 /** Number of active filter conditions — drives the toolbar badge. */
@@ -63,31 +65,31 @@ export function openFilters(
     minRating: current.minRating,
   };
 
-  const modal = openModal({ title: 'Фильтры' });
+  const modal = openModal({ title: t('filters.title') });
   const tags = collectTags(opts.locations);
 
   modal.body.innerHTML = `
     <div class="filter-group">
-      ${toggleRow('openNow', '💡', 'Открыто сейчас', draft.openNow)}
+      ${toggleRow('openNow', '💡', t('filters.openNow'), draft.openNow)}
     </div>
 
     <div class="filter-group">
-      <div class="filter-label">Доступ по полу</div>
+      <div class="filter-label">${esc(t('filters.byGender'))}</div>
       <div class="filter-checks">
-        ${LAYOUT_LABELS.map((o) =>
-          checkRow('layout', o.value, o.label, draft.layoutTypes.has(o.value)),
+        ${layoutLabels().map((o) =>
+          checkRow('layout', o.value, esc(o.label), draft.layoutTypes.has(o.value)),
         ).join('')}
       </div>
     </div>
 
     <div class="filter-group">
-      <div class="filter-label">Тип оплаты</div>
+      <div class="filter-label">${esc(t('filters.priceType'))}</div>
       <div class="filter-checks">
-        ${PRICE_LABELS.map((o) =>
+        ${priceLabels().map((o) =>
           checkRow(
             'price',
             o.value,
-            `<span class="dot dot-${o.dot}" aria-hidden="true"></span> ${o.label}`,
+            `<span class="dot dot-${o.dot}" aria-hidden="true"></span> ${esc(o.label)}`,
             draft.priceTypes.has(o.value),
           ),
         ).join('')}
@@ -95,13 +97,13 @@ export function openFilters(
     </div>
 
     <div class="filter-group">
-      ${toggleRow('accessibleOnly', '♿', 'Только доступные для инвалидов', draft.accessibleOnly)}
+      ${toggleRow('accessibleOnly', '♿', t('filters.accessibleOnly'), draft.accessibleOnly)}
     </div>
 
     ${
       tags.length > 0
         ? `<div class="filter-group">
-            <div class="filter-label">Удобства</div>
+            <div class="filter-label">${esc(t('filters.amenities'))}</div>
             <div class="filter-chips">
               ${tags
                 .map(
@@ -119,15 +121,15 @@ export function openFilters(
     }
 
     <div class="filter-group">
-      <div class="filter-label">Рейтинг от</div>
-      <div class="filter-segment" role="group" aria-label="Минимальный рейтинг">
+      <div class="filter-label">${esc(t('filters.minRating'))}</div>
+      <div class="filter-segment" role="group" aria-label="${esc(t('filters.minRatingLabel'))}">
         ${[0, 1, 2, 3, 4, 5]
           .map(
             (r) =>
               `<button type="button" class="seg-btn${
                 draft.minRating === r ? ' is-on' : ''
               }" data-rating="${r}" aria-pressed="${draft.minRating === r}">${
-                r === 0 ? 'Любой' : `${r}★`
+                r === 0 ? esc(t('filters.ratingAny')) : esc(t('filters.ratingStars', { r }))
               }</button>`,
           )
           .join('')}
@@ -195,7 +197,7 @@ export function openFilters(
   const reset = document.createElement('button');
   reset.type = 'button';
   reset.className = 'btn btn-secondary';
-  reset.textContent = 'Сбросить';
+  reset.textContent = t('common.reset');
   reset.addEventListener('click', () => {
     // Reset to defaults but keep the (untouched) query.
     onApply({ ...defaultFilter(), query: current.query });
@@ -205,7 +207,7 @@ export function openFilters(
   const apply = document.createElement('button');
   apply.type = 'button';
   apply.className = 'btn btn-primary';
-  apply.textContent = 'Применить';
+  apply.textContent = t('common.apply');
   apply.addEventListener('click', () => {
     onApply({
       openNow: draft.openNow,

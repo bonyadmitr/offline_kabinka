@@ -1,5 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import { AppError } from '../core/errors';
+import { t } from '../i18n';
 import '../styles.css';
 
 // ─── Zoom controls ───────────────────────────────────────────────────────────
@@ -11,14 +12,14 @@ export function addZoomControls(map: maplibregl.Map, container: HTMLElement): vo
   const zoomIn = document.createElement('button');
   zoomIn.type = 'button';
   zoomIn.className = 'map-ctrl-btn';
-  zoomIn.setAttribute('aria-label', 'Увеличить масштаб');
+  zoomIn.setAttribute('aria-label', t('map.zoomIn'));
   zoomIn.textContent = '+';
   zoomIn.addEventListener('click', () => map.zoomIn());
 
   const zoomOut = document.createElement('button');
   zoomOut.type = 'button';
   zoomOut.className = 'map-ctrl-btn';
-  zoomOut.setAttribute('aria-label', 'Уменьшить масштаб');
+  zoomOut.setAttribute('aria-label', t('map.zoomOut'));
   zoomOut.textContent = '−';
   zoomOut.addEventListener('click', () => map.zoomOut());
 
@@ -132,7 +133,7 @@ export function addGeolocate(map: maplibregl.Map, opts: GeolocateOpts): void {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'map-ctrl-btn map-ctrl-geolocate';
-  btn.setAttribute('aria-label', 'Моё местоположение');
+  btn.setAttribute('aria-label', t('map.myLocation'));
   btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="3"/>
     <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>

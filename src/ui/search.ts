@@ -2,6 +2,8 @@
 // upward; a clear (✕) button resets it. Purely a controlled input — the caller
 // owns the FilterState and re-renders the list from it.
 
+import { t } from '../i18n';
+
 export interface SearchOpts {
   /** Initial query value. */
   value?: string;
@@ -32,8 +34,8 @@ export function createSearch(opts: SearchOpts): SearchControl {
   const input = document.createElement('input');
   input.type = 'search';
   input.className = 'search-input';
-  input.placeholder = 'Поиск по названию или адресу';
-  input.setAttribute('aria-label', 'Поиск');
+  input.placeholder = t('search.placeholder');
+  input.setAttribute('aria-label', t('search.label'));
   input.autocomplete = 'off';
   // Suppress the native clear affordance; we render our own.
   input.setAttribute('enterkeyhint', 'search');
@@ -42,7 +44,7 @@ export function createSearch(opts: SearchOpts): SearchControl {
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.className = 'search-clear';
-  clear.setAttribute('aria-label', 'Очистить');
+  clear.setAttribute('aria-label', t('search.clear'));
   clear.innerHTML = '<span aria-hidden="true">✕</span>';
   clear.hidden = !input.value;
 

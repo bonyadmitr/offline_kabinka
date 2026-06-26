@@ -1,0 +1,164 @@
+// Russian dictionary — the source of truth for every user-facing UI string.
+// Keys are flat dotted paths (e.g. 'card.route'); values are strings or, for
+// pluralised/parameterised text, functions of the params. `en.ts` mirrors these
+// keys exactly (enforced by tests/unit/i18n.test.ts).
+//
+// NB: data content from the API (titles, addresses, tag names, comment text) is
+// never translated — only the app "chrome" lives here.
+
+export type Dict = Record<string, string | ((p: Record<string, unknown>) => string)>;
+
+export const ru = {
+  // ── Common buttons / generic ──
+  'common.apply': 'Применить',
+  'common.reset': 'Сбросить',
+  'common.back': 'Назад',
+  'common.close': 'Закрыть',
+  'common.cancel': 'Отмена',
+  'common.soon': 'скоро',
+
+  // ── Toolbar ──
+  'toolbar.filters': 'Фильтры',
+  'toolbar.settings': 'Настройки',
+
+  // ── Map controls ──
+  'map.zoomIn': 'Увеличить масштаб',
+  'map.zoomOut': 'Уменьшить масштаб',
+  'map.myLocation': 'Моё местоположение',
+
+  // ── Search ──
+  'search.placeholder': 'Поиск по названию или адресу',
+  'search.label': 'Поиск',
+  'search.clear': 'Очистить',
+
+  // ── List ──
+  'list.empty': 'Ничего не найдено',
+  // n = number of places; returns the plural noun only ("место"/"места"/"мест").
+  'list.placesWord': (p) => {
+    const n = Number(p.n) || 0;
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'место';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'места';
+    return 'мест';
+  },
+  'list.open': 'Открыто',
+  'list.closed': 'Закрыто',
+
+  // ── Card ──
+  'card.verified': 'проверено',
+  'card.noRatings': 'Пока нет оценок',
+  'card.cleanliness': 'Чистота',
+  'card.equipment': 'Оснащённость',
+  'card.loyalty': 'Лояльность',
+  // n = number of reviews; returns the plural noun ("оценка"/"оценки"/"оценок").
+  'card.reviewsWord': (p) => {
+    const n = Number(p.n) || 0;
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'оценка';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'оценки';
+    return 'оценок';
+  },
+  'card.accessible': 'Доступно',
+  'card.cabins': (p) => `Кабины: ${p.n}`,
+  'card.urinals': (p) => `Писсуары: ${p.n}`,
+  'card.sinks': (p) => `Раковины: ${p.n}`,
+  'card.hours': 'Режим работы',
+  'card.open': 'Открыто',
+  'card.closed': 'Закрыто',
+  'card.break': (p) => `(перерыв ${p.start}–${p.end})`,
+  'card.priceFree': 'Бесплатно',
+  'card.pricePaid': 'Платно',
+  'card.pricePaidValue': (p) => `Платно — ${p.value} BYN`,
+  'card.priceConditional': 'Условно-бесплатно',
+  'card.howToFind': 'Как найти',
+  'card.comments': 'Комментарии',
+  'card.guest': 'Гость',
+  'card.reportError': 'Сообщить об ошибке',
+  'card.route': 'Маршрут',
+  'card.share': 'Поделиться',
+
+  // ── Day-of-week short names (index 1..7 = Mon..Sun) ──
+  'day.mon': 'Пн',
+  'day.tue': 'Вт',
+  'day.wed': 'Ср',
+  'day.thu': 'Чт',
+  'day.fri': 'Пт',
+  'day.sat': 'Сб',
+  'day.sun': 'Вс',
+
+  // ── Distance / price (list + card short forms) ──
+  'unit.metres': (p) => `${p.v} м`,
+  'unit.km': (p) => `${p.v} км`,
+  'price.free': 'Бесплатно',
+  'price.paid': (p) => `${p.value} BYN`,
+  'price.paidShort': 'Платно',
+  'price.conditionalShort': 'Условно',
+
+  // ── Gallery / viewer ──
+  'gallery.empty': 'Фотографии отсутствуют',
+  'gallery.photoOf': (p) => `Фото ${p.i} из ${p.n}`,
+  'viewer.unavailable': 'Фото недоступно (IMG-01)',
+  'viewer.prev': 'Предыдущее фото',
+  'viewer.next': 'Следующее фото',
+
+  // ── Filters modal ──
+  'filters.title': 'Фильтры',
+  'filters.openNow': 'Открыто сейчас',
+  'filters.byGender': 'Доступ по полу',
+  'filters.layoutBlock': 'Общий блок',
+  'filters.layoutMale': 'Мужской',
+  'filters.layoutFemale': 'Женский',
+  'filters.layoutUnisex': 'Совмещённый',
+  'filters.priceType': 'Тип оплаты',
+  'filters.priceFree': 'Бесплатно',
+  'filters.priceConditional': 'Условно-бесплатно',
+  'filters.pricePaid': 'Платно',
+  'filters.accessibleOnly': 'Только доступные для инвалидов',
+  'filters.amenities': 'Удобства',
+  'filters.minRating': 'Рейтинг от',
+  'filters.minRatingLabel': 'Минимальный рейтинг',
+  'filters.ratingAny': 'Любой',
+  'filters.ratingStars': (p) => `${p.r}★`,
+
+  // ── Settings modal ──
+  'settings.title': 'Настройки',
+  'settings.uiLanguage': 'Язык интерфейса',
+  'settings.mapLanguage': 'Язык карты',
+  'settings.darkTheme': 'Тёмная тема',
+  'settings.listRadius': 'Радиус списка',
+  'settings.radiusKm': (p) => `${p.km} км`,
+  'settings.defaultNavigator': 'Навигатор по умолчанию',
+  'settings.navYandexMaps': 'Яндекс Карты',
+  'settings.navYandexNavi': 'Яндекс Навигатор',
+  'settings.navGoogle': 'Google',
+  'settings.navApple': 'Apple',
+  'settings.soonGroup': 'Скоро',
+  'settings.refreshData': 'Обновить данные',
+  'settings.refreshMap': 'Обновить карту',
+  'settings.appSize': 'Размер приложения',
+  'settings.clearCache': 'Очистить кеш',
+  'settings.install': 'Как установить приложение',
+  'settings.deviceId': 'Device ID',
+  'settings.version': 'Версия',
+
+  // ── Sheet ──
+  'sheet.label': 'Список туалетов',
+  'sheet.resize': 'Перетащите, чтобы изменить размер',
+
+  // ── Share ──
+  'share.copied': 'Ссылка скопирована',
+
+  // ── Routing ──
+  'route.title': 'Маршрут',
+  'route.distance': 'Расстояние',
+  'route.bearing': 'Азимут',
+  'route.openInNavigator': 'Открыть в навигаторе',
+  'route.hideRoute': 'Скрыть маршрут',
+  'route.needGeo': 'Включите геолокацию, чтобы построить маршрут',
+  'route.offlineNotice': 'Внешний навигатор требует интернета. Офлайн-линия уже построена.',
+  'route.compassUnavailable': 'Компас недоступен',
+} satisfies Dict;
+
+export type RuKey = keyof typeof ru;
