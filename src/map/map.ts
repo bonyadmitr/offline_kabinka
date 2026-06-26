@@ -3,15 +3,28 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
 import { LABEL_LAYER_IDS } from './style';
 
-let registered = false;
+// Single shared pmtiles Protocol instance. Both the network source (FetchSource,
+// created lazily by Protocol on first tile request) and the stored-blob source
+// (IDBBlobSource, added explicitly via protocol.add) must live on the SAME
+// instance, because we register the 'pmtiles' scheme with MapLibre exactly once.
+let protocol: Protocol | null = null;
+
+/**
+ * Get (creating once) the shared pmtiles Protocol instance.
+ * pmtiles-source.ts uses this to `protocol.add(pm)` the stored-blob archive.
+ */
+export function getProtocol(): Protocol {
+  if (!protocol) protocol = new Protocol();
+  return protocol;
+}
 
 export function registerPmtiles(): void {
-  if (registered) return;
-  const p = new Protocol();
+  const p = getProtocol();
+  if ((p as { __registered?: boolean }).__registered) return;
   // pmtiles v4: Protocol.tile is V3OrV4Protocol — supports both MapLibre v3 callback
   // and MapLibre v4 AbortController-based API. We pass it directly.
   maplibregl.addProtocol('pmtiles', p.tile.bind(p));
-  registered = true;
+  (p as { __registered?: boolean }).__registered = true;
 }
 
 export function createMap(

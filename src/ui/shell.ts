@@ -1,6 +1,7 @@
 import type maplibregl from 'maplibre-gl';
 import { registerPmtiles, createMap } from '../map/map';
 import { buildStyle } from '../map/style';
+import { resolvePmtilesUrl } from '../offline/pmtiles-source';
 import { addZoomControls, addGeolocate } from '../map/controls';
 import { createSheet, type Sheet } from './sheet';
 import { toUserMessage } from '../core/errors';
@@ -11,10 +12,13 @@ export interface Shell {
   sheet: Sheet;
   /** Slot for a top toolbar (filters / settings placeholders for WU5). */
   toolbar: HTMLElement;
+  /**
+   * The resolved bare pmtiles source string used for the initial style —
+   * either the stored-blob key (`minsk`) or the network URL. main.ts reuses
+   * it for style rebuilds (theme/lang swaps) so the source stays consistent.
+   */
+  pmtilesUrl: string;
 }
-
-/** Single source of truth for the PMTiles URL (used by shell + style rebuilds). */
-export const PMTILES_URL = import.meta.env.BASE_URL + 'map/minsk.pmtiles';
 
 export interface ShellOpts {
   lang: 'ru' | 'en';
@@ -25,8 +29,11 @@ export interface ShellOpts {
  * Mount the full-screen app shell: a map background (#map) with zoom + geolocate
  * controls, a responsive sheet/panel, and a toolbar slot. The map may render an
  * empty canvas until real PMTiles ship (WU6) — that is expected and must not throw.
+ *
+ * Async because it first checks IndexedDB for a stored map blob: if present the
+ * map is served from IndexedDB (offline), otherwise from the network URL.
  */
-export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
+export async function mountShell(root: HTMLElement, opts: ShellOpts): Promise<Shell> {
   root.classList.add('app-root');
   // Theme class goes on <html> (not #app) so the --bg token also reaches <body>,
   // keeping the iOS overscroll/rubber-band area the right colour.
@@ -51,9 +58,14 @@ export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
   root.appendChild(panelHost);
   const sheet = createSheet(panelHost);
 
-  // Create the map. Guard so a missing PMTiles file never crashes the app.
+  // Resolve the map source: stored IndexedDB blob (offline) if present, else the
+  // network URL. registerPmtiles() is also called inside resolvePmtilesUrl when a
+  // stored blob is found; call it here too so the network path is registered.
   registerPmtiles();
-  const map = createMap(mapEl, buildStyle({ lang: opts.lang, theme: opts.theme, pmtilesUrl: PMTILES_URL }));
+  const pmtilesUrl = await resolvePmtilesUrl();
+
+  // Create the map. Guard so a missing PMTiles file never crashes the app.
+  const map = createMap(mapEl, buildStyle({ lang: opts.lang, theme: opts.theme, pmtilesUrl }));
 
   // Surface (but do not throw on) map errors — empty tiles in dev are fine.
   map.on('error', (e) => {
@@ -65,7 +77,7 @@ export function mountShell(root: HTMLElement, opts: ShellOpts): Shell {
     onError: (err) => console.warn('[geolocate]', toUserMessage(err)),
   });
 
-  return { map, sheet, toolbar };
+  return { map, sheet, toolbar, pmtilesUrl };
 }
 
 function makeToolbarBtn(label: string, act: string, ariaLabel: string): HTMLButtonElement {

@@ -7,7 +7,7 @@ import { addMarkers, updateMarkers } from './map/markers';
 import { setMapLanguage } from './map/map';
 import { buildStyle } from './map/style';
 import { getUserPosition } from './map/controls';
-import { mountShell, PMTILES_URL } from './ui/shell';
+import { mountShell } from './ui/shell';
 import { renderList, type UserPos } from './ui/list';
 import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
@@ -53,7 +53,7 @@ async function bootstrap(): Promise<void> {
   });
 
   // ── Shell + map ──
-  const shell = mountShell(root, { lang: store.get().mapLang, theme: store.get().theme });
+  const shell = await mountShell(root, { lang: store.get().mapLang, theme: store.get().theme });
   const { map, sheet } = shell;
 
   // ── Toolbar: filters button + active-conditions badge ──
@@ -208,7 +208,7 @@ async function bootstrap(): Promise<void> {
         // re-add markers once the new style is live (one-shot styledata listener).
         // If the map was never ready, initMarkers()'s 'load' handler covers it.
         if (mapReady) map.once('styledata', reAddMarkers);
-        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: t, pmtilesUrl: PMTILES_URL }));
+        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: t, pmtilesUrl: shell.pmtilesUrl }));
       },
       setRadius: (km) => {
         store.set({ radius: km });
