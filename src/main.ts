@@ -13,7 +13,9 @@ import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
 import { openSettings, type SettingsCtx, type Radius, type NavigatorId } from './ui/settings';
 import { createSearch } from './ui/search';
-import { shareLocation } from './ui/share';
+import { shareLocation, showToast } from './ui/share';
+import { startRoute } from './routing';
+import { setLang, getLang, t } from './i18n';
 import {
   loadRadius,
   saveRadius,
@@ -43,7 +45,7 @@ async function bootstrap(): Promise<void> {
     filtered: [],
     selectedId: null,
     filter: defaultFilter(),
-    uiLang: 'ru',
+    uiLang: getLang(), // persisted in localStorage by the i18n module
     mapLang: 'ru',
     theme: 'light',
     radius: loadRadius(),
@@ -112,14 +114,48 @@ async function bootstrap(): Promise<void> {
     renderList(sheet.listView, store.get().filtered, { userPos: userPos(), onSelect });
   };
 
+  // Prompt for geolocation when a route needs a user position: trigger the map's
+  // geolocate control (which requests the browser permission) and nudge the user.
+  const promptForGeo = (): void => {
+    const geoBtn = map
+      .getContainer()
+      .querySelector<HTMLButtonElement>('.map-ctrl-geolocate');
+    geoBtn?.click();
+    showToast(t('route.needGeo'));
+  };
+
   const drawCard = (id: number): void => {
     const loc = store.get().locations.find((l) => l.id === id);
     if (!loc) return;
     renderCard(sheet.cardView, loc, {
       onBack: () => store.set({ selectedId: null }),
-      onRoute: (l) => console.info('[route] WU5 will wire this', l.id), // WU5b hook
+      onRoute: (l) =>
+        startRoute(map, l, { getUserPos: userPos, onNeedGeo: promptForGeo }),
       onShare: (l) => void shareLocation(l),
     });
+  };
+
+  // Re-render the persistent chrome after a UI-language switch: list, open card,
+  // toolbar filters label (preserving its badge), and the search box strings.
+  const rerenderUiLang = (): void => {
+    drawList();
+    if (store.get().selectedId != null) drawCard(store.get().selectedId!);
+    if (filtersBtn) {
+      // The label is the button's first child text node; the badge (if any) is a
+      // trailing <span>, so update only the text node and re-apply the badge.
+      const labelNode = filtersBtn.childNodes[0];
+      if (labelNode && labelNode.nodeType === Node.TEXT_NODE) {
+        labelNode.textContent = t('toolbar.filters');
+      } else {
+        filtersBtn.textContent = t('toolbar.filters');
+      }
+      updateFilterBadge();
+    }
+    const input = search.el.querySelector<HTMLInputElement>('.search-input');
+    if (input) {
+      input.placeholder = t('search.placeholder');
+      input.setAttribute('aria-label', t('search.label'));
+    }
   };
 
   // ── Subscriptions ──
@@ -153,10 +189,12 @@ async function bootstrap(): Promise<void> {
       radius: s.radius,
       navigator: s.navigator,
       setUiLang: (l) => {
-        // Actual string swap is WU5b; for now persist + rerender current views.
+        // Swap the active dictionary (also persists to localStorage), mirror it in
+        // the store, then re-render the persistent UI. Open modals are transient and
+        // pick up the new language next time they open.
+        setLang(l);
         store.set({ uiLang: l });
-        drawList();
-        if (store.get().selectedId != null) drawCard(store.get().selectedId!);
+        rerenderUiLang();
       },
       setMapLang: (l) => {
         store.set({ mapLang: l });
@@ -164,7 +202,8 @@ async function bootstrap(): Promise<void> {
       },
       setTheme: (t) => {
         store.set({ theme: t });
-        root.classList.toggle('theme-dark', t === 'dark');
+        // Theme class on <html> so the --bg token reaches <body> (iOS overscroll).
+        document.documentElement.classList.toggle('theme-dark', t === 'dark');
         // setStyle() drops our custom point source/layers. Rebuild the style, then
         // re-add markers once the new style is live (one-shot styledata listener).
         // If the map was never ready, initMarkers()'s 'load' handler covers it.
