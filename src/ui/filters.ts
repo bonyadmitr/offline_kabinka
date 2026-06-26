@@ -47,8 +47,11 @@ export interface FiltersOpts {
 }
 
 /**
- * Open the filters modal. `current` seeds the controls; `onApply` is called with
- * a fresh FilterState (query is preserved from `current`, never edited here).
+ * Open the filters modal. `current` seeds the controls; `onApply` is called
+ * *live* — on every control change — with a fresh FilterState (query is preserved
+ * from `current`, never edited here). There is no "Apply" button: changes take
+ * effect immediately and the modal is closed via the ✕, the backdrop, Escape, or
+ * "Reset".
  */
 export function openFilters(
   current: FilterState,
@@ -140,15 +143,32 @@ export function openFilters(
   // ── Wire controls ──
   const body = modal.body;
 
+  // Emit a fresh FilterState from the current draft. Called after every control
+  // change so the list/markers/badge update live (no "Apply" step). New Sets are
+  // copied so the store's referential-equality check sees a fresh `filter`.
+  const emit = (): void => {
+    onApply({
+      openNow: draft.openNow,
+      layoutTypes: new Set(draft.layoutTypes),
+      priceTypes: new Set(draft.priceTypes),
+      accessibleOnly: draft.accessibleOnly,
+      tagSlugs: new Set(draft.tagSlugs),
+      minRating: draft.minRating,
+      query: current.query, // never edited by the filters modal
+    });
+  };
+
   // openNow toggle
   body.querySelector<HTMLInputElement>('[data-toggle="openNow"]')?.addEventListener('change', (e) => {
     draft.openNow = (e.target as HTMLInputElement).checked;
+    emit();
   });
   // accessibleOnly toggle
   body
     .querySelector<HTMLInputElement>('[data-toggle="accessibleOnly"]')
     ?.addEventListener('change', (e) => {
       draft.accessibleOnly = (e.target as HTMLInputElement).checked;
+      emit();
     });
 
   // layout checkboxes
@@ -157,6 +177,7 @@ export function openFilters(
       const v = el.value as LayoutType;
       if (el.checked) draft.layoutTypes.add(v);
       else draft.layoutTypes.delete(v);
+      emit();
     });
   });
   // price checkboxes
@@ -165,6 +186,7 @@ export function openFilters(
       const v = el.value as PriceType;
       if (el.checked) draft.priceTypes.add(v);
       else draft.priceTypes.delete(v);
+      emit();
     });
   });
 
@@ -177,6 +199,7 @@ export function openFilters(
       else draft.tagSlugs.delete(slug);
       el.classList.toggle('is-on', on);
       el.setAttribute('aria-pressed', String(on));
+      emit();
     });
   });
 
@@ -190,38 +213,22 @@ export function openFilters(
         b.classList.toggle('is-on', on);
         b.setAttribute('aria-pressed', String(on));
       });
+      emit();
     });
   });
 
-  // ── Footer actions ──
+  // ── Footer: only "Reset" (no "Apply" — changes are live). Close via ✕/backdrop. ──
   const reset = document.createElement('button');
   reset.type = 'button';
   reset.className = 'btn btn-secondary';
   reset.textContent = t('common.reset');
   reset.addEventListener('click', () => {
-    // Reset to defaults but keep the (untouched) query.
+    // Reset to defaults but keep the (untouched) query. Closes the modal.
     onApply({ ...defaultFilter(), query: current.query });
     modal.close();
   });
 
-  const apply = document.createElement('button');
-  apply.type = 'button';
-  apply.className = 'btn btn-primary';
-  apply.textContent = t('common.apply');
-  apply.addEventListener('click', () => {
-    onApply({
-      openNow: draft.openNow,
-      layoutTypes: new Set(draft.layoutTypes),
-      priceTypes: new Set(draft.priceTypes),
-      accessibleOnly: draft.accessibleOnly,
-      tagSlugs: new Set(draft.tagSlugs),
-      minRating: draft.minRating,
-      query: current.query, // never edited by the filters modal
-    });
-    modal.close();
-  });
-
-  modal.footer.append(reset, apply);
+  modal.footer.append(reset);
 }
 
 function toggleRow(key: string, icon: string, label: string, checked: boolean): string {

@@ -47,38 +47,51 @@ test('collectTags dedupes by slug and sorts', () => {
   expect(tags.map((t) => t.slug)).toEqual(['a', 'b']);
 });
 
-test('opening renders controls and apply collects a fresh FilterState', () => {
+test('changes apply live — each control fires onApply with a fresh FilterState', () => {
   const locs = [L({ tags: [{ id: 1, slug: 'hot-water', name: 'Горячая вода', icon: '🔥' }] })];
-  let applied: FilterState | null = null;
-  openFilters({ ...defaultFilter(), query: 'keepme' }, (f) => (applied = f), { locations: locs });
+  const applied: FilterState[] = [];
+  openFilters({ ...defaultFilter(), query: 'keepme' }, (f) => applied.push(f), { locations: locs });
 
   const overlay = document.querySelector('.modal-overlay');
   expect(overlay).toBeTruthy();
 
-  // Toggle openNow, check a layout box, select a tag, pick rating 4.
+  // There is no "Apply" button — only "Reset" lives in the footer.
+  const footerBtns = document.querySelectorAll<HTMLButtonElement>('.modal-footer .btn');
+  expect(footerBtns).toHaveLength(1);
+  expect(footerBtns[0].textContent).toBe('Сбросить');
+
+  // Toggle openNow → fires immediately.
   document.querySelector<HTMLInputElement>('[data-toggle="openNow"]')!.checked = true;
   document
     .querySelector<HTMLInputElement>('[data-toggle="openNow"]')!
     .dispatchEvent(new Event('change'));
+  expect(applied.at(-1)!.openNow).toBe(true);
 
+  // Check a layout box → fires immediately.
   const blockBox = document.querySelector<HTMLInputElement>('[data-check="layout"][value="block"]')!;
   blockBox.checked = true;
   blockBox.dispatchEvent(new Event('change'));
+  expect(applied.at(-1)!.layoutTypes.has('block')).toBe(true);
 
+  // Select a tag → fires immediately.
   document.querySelector<HTMLButtonElement>('[data-tag="hot-water"]')!.click();
+  expect(applied.at(-1)!.tagSlugs.has('hot-water')).toBe(true);
+
+  // Pick rating 4 → fires immediately.
   document.querySelector<HTMLButtonElement>('[data-rating="4"]')!.click();
 
-  // Apply (footer second button).
-  const buttons = document.querySelectorAll<HTMLButtonElement>('.modal-footer .btn');
-  buttons[1].click();
-
-  expect(applied).not.toBeNull();
-  const f = applied as unknown as FilterState;
+  // Four live emissions, each a fresh object; the latest carries every change and
+  // preserves the untouched query.
+  expect(applied).toHaveLength(4);
+  const f = applied.at(-1)!;
   expect(f.openNow).toBe(true);
   expect(f.layoutTypes.has('block')).toBe(true);
   expect(f.tagSlugs.has('hot-water')).toBe(true);
   expect(f.minRating).toBe(4);
   expect(f.query).toBe('keepme'); // query preserved untouched
+
+  // The modal stays open after a live change (no auto-close on apply).
+  expect(document.querySelector('.modal-overlay')).toBeTruthy();
 });
 
 test('reset emits defaults but preserves query', () => {

@@ -94,11 +94,15 @@ test('filters: "Открыто сейчас" narrows the list; reset restores fu
   // bound checkbox and fires the change handler — robust across both viewports.
   await modal.locator('label.filter-toggle').filter({ has: page.locator('[data-toggle="openNow"]') }).click();
 
-  // Apply.
-  await modal.getByRole('button', { name: 'Применить' }).click();
+  // Filters apply live (no "Apply" button): the badge appears while the modal is
+  // still open, the moment the toggle fires.
+  await expect(page.locator('[data-act="filters"] .toolbar-badge')).toBeVisible();
+
+  // Close the modal via the ✕ (the only ways out are ✕ / backdrop / Esc / Reset).
+  await modal.locator('.modal-close').click();
   await expect(modal).toHaveCount(0);
 
-  // The active-filter badge appears on the Filters button.
+  // The active-filter badge persists after the modal closes.
   await expect(page.locator('[data-act="filters"] .toolbar-badge')).toBeVisible();
   // The count is non-zero and strictly below the full set (some places are closed right now).
   await expect
