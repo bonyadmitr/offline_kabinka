@@ -284,8 +284,9 @@ export async function loadThumbsPackFromIDB(): Promise<void> {
     }
   }
 
-  const buf = await blob.arrayBuffer();
-  setPack(buf, index);
+  // Hand the Blob straight to the pack — do NOT read it into an ArrayBuffer.
+  // getThumbObjectUrl() slices lazily, so the ~8.3 MB stays out of the JS heap.
+  setPack(blob, index);
 }
 
 /**
