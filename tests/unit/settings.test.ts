@@ -18,6 +18,7 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     onDataUpdated: [],
     onMapUpdated: [],
     onPackageRemoved: [],
+    onThumbsChanged: [],
   };
   const ctx: SettingsCtx = {
     uiLang: 'ru',
@@ -38,6 +39,9 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     },
     onPackageRemoved: () => {
       calls.onPackageRemoved.push(true);
+    },
+    onThumbsChanged: () => {
+      calls.onThumbsChanged.push(true);
     },
     ...over,
   };
@@ -70,6 +74,39 @@ test('renders all sections incl. theme segment + offline package + version', () 
   expect(body.querySelector('[data-install]')).toBeTruthy();
   // Device ID is no longer displayed.
   expect(body.querySelector('.set-device-id')).toBeFalsy();
+});
+
+test('offline section renders two independent package rows + the thumbs hint', () => {
+  const { ctx } = mockCtx();
+  openSettings(ctx);
+  const body = document.querySelector('.modal-body')!;
+  // Two row hosts are created synchronously (map + photo thumbnails).
+  expect(body.querySelector('[data-package] [data-pkg="map"]')).toBeTruthy();
+  expect(body.querySelector('[data-package] [data-pkg="thumbs"]')).toBeTruthy();
+  // The online-fallback hint sits under the thumbs row.
+  expect(body.querySelector('[data-package] .set-hint')).toBeTruthy();
+});
+
+test('offline rows resolve to a Download/Delete action button (async render)', async () => {
+  const { ctx } = mockCtx();
+  openSettings(ctx);
+  const body = document.querySelector('.modal-body')!;
+
+  // renderRow awaits blobSize + the (failing → fallback) size probe before it
+  // appends the button; poll a few ticks until the async render lands.
+  const waitFor = async (sel: string): Promise<Element> => {
+    for (let i = 0; i < 50; i++) {
+      const el = body.querySelector(sel);
+      if (el) return el;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    throw new Error('timeout waiting for ' + sel);
+  };
+
+  // No blobs in jsdom IDB → each row offers Download (not Delete).
+  await waitFor('[data-pkg="map"] .set-action[data-act="download-map"]');
+  await waitFor('[data-pkg="thumbs"] .set-action[data-act="download-thumbs"]');
+  expect(body.querySelector('[data-pkg="map"] .set-action[data-act="delete-map"]')).toBeFalsy();
 });
 
 test('theme segment calls setTheme with the chosen preference', () => {

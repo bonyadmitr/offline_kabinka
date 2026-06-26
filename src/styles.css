@@ -1750,11 +1750,32 @@ body.modal-open {
   font-weight: 600;
 }
 
-/* Offline-package section: status row + the single Download/Delete action. */
+/* Offline section: two independent package rows (map + photo thumbnails). */
 .set-package {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
+}
+
+/* One package row: sub-heading + status + the single Download/Delete action. */
+.set-package-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Row sub-heading (e.g. "Map (offline)" / "Photo thumbnails (offline)"). */
+.set-subhead {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Small explanatory note (e.g. the thumbnails online-fallback hint). */
+.set-hint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-3);
 }
 
 /* ============================================================================

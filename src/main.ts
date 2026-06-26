@@ -225,6 +225,18 @@ async function bootstrap(): Promise<void> {
     map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: shell.pmtilesUrl }));
   };
 
+  // Re-point the map at the stored ('minsk') source and rebuild the style after
+  // the map blob is downloaded (settings or boot-offer). setStyle drops our
+  // custom point source/layers, so re-add markers once the new style is live
+  // (mirrors the theme-swap path). Also pins shell.pmtilesUrl to the stored
+  // source so later style rebuilds (theme swaps) keep serving from IndexedDB.
+  const restoreStoredMap = async (): Promise<void> => {
+    const src = (await useStoredPmtilesIfPresent(PMTILES_KEY)) ?? shell.pmtilesUrl;
+    shell.pmtilesUrl = src;
+    if (mapReady) map.once('styledata', reAddMarkers);
+    map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
+  };
+
   // When following the OS ('system'), re-apply live as the OS scheme flips.
   watchSystemTheme(() => {
     if (store.get().theme === 'system') applyEffectiveTheme();
@@ -274,25 +286,23 @@ async function bootstrap(): Promise<void> {
         // Refresh an open card too (its data may have changed).
         if (store.get().selectedId != null) drawCard(store.get().selectedId!);
       },
-      onMapUpdated: async () => {
-        // Register the newly stored archive on the pmtiles protocol, then rebuild
-        // the style pointing at the stored source ('minsk'). setStyle drops our
-        // custom point source/layers, so re-add markers once the new style is live
-        // (mirrors the theme-swap path).
-        const src = (await useStoredPmtilesIfPresent(PMTILES_KEY)) ?? shell.pmtilesUrl;
-        if (mapReady) map.once('styledata', reAddMarkers);
-        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
-      },
+      onMapUpdated: () => restoreStoredMap(),
       onPackageRemoved: async () => {
         // The stored map blob is gone — re-point the style at the network source
         // (range requests when online). resolvePmtilesUrl returns the network URL
         // now that no blob is present. Offline, tiles simply won't load until the
-        // connection returns; the rest of the app keeps working.
+        // connection returns; the rest of the app keeps working. (Map only — the
+        // thumbnail pack is independent; see onThumbsChanged.)
         const src = await resolvePmtilesUrl(PMTILES_KEY);
         shell.pmtilesUrl = src;
         if (mapReady) map.once('styledata', reAddMarkers);
         map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
-        // Thumbnails fell back to online URLs (pack cleared) — redraw to refresh.
+      },
+      onThumbsChanged: () => {
+        // The thumbnail pack was downloaded or deleted — redraw the list (and any
+        // open card) so thumbnails re-resolve from the pack (blob: URLs) or the
+        // online fallback. Lazy IntersectionObserver loading is preserved: a fresh
+        // render re-arms the observers on the new <img> elements.
         drawList();
         if (store.get().selectedId != null) drawCard(store.get().selectedId!);
       },
@@ -386,9 +396,12 @@ async function bootstrap(): Promise<void> {
   initInstallHint();
 
   // ── Offer the offline package once, if not yet downloaded and online ──
-  void maybeOfferOfflinePackage(() => {
-    // Pack is now hydrated — redraw the list (and any open card) so thumbnails
-    // upgrade from the online fallback to the offline bundle's object URLs.
+  void maybeOfferOfflinePackage(async () => {
+    // Map blob is now stored — re-point the map at the stored ('minsk') source so
+    // it works offline (previously the offer only refreshed thumbnails). Then
+    // redraw the list (and any open card) so thumbnails upgrade from the online
+    // fallback to the offline bundle's object URLs.
+    await restoreStoredMap();
     drawList();
     if (store.get().selectedId != null) drawCard(store.get().selectedId!);
   });
@@ -399,7 +412,7 @@ async function bootstrap(): Promise<void> {
  * offline package. Shown once per session (a dismissable toast-style banner).
  * Running the download opens a progress overlay with retry-on-error.
  */
-async function maybeOfferOfflinePackage(onDone: () => void): Promise<void> {
+async function maybeOfferOfflinePackage(onDone: () => void | Promise<void>): Promise<void> {
   try {
     if ((await blobSize(PMTILES_KEY)) > 0) return; // already have the map
   } catch {
@@ -413,10 +426,10 @@ async function maybeOfferOfflinePackage(onDone: () => void): Promise<void> {
     const overlay = progressOverlay();
     const start = (): void => {
       ensureOfflinePackage((p, label) => overlay.update(p, label))
-        .then(() => {
+        .then(async () => {
           overlay.close();
           toast(t('offline.done'));
-          onDone();
+          await onDone();
         })
         .catch((e) => {
           overlay.error(toUserMessage(e), { onRetry: start });

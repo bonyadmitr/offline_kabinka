@@ -5,13 +5,19 @@ import {
   estimateUsage,
   transientBytes,
   clearTransient,
-  deletePackage,
+  mapDownloaded,
+  thumbsDownloaded,
+  deleteMapPackage,
+  deleteThumbsPackage,
   formatBytes,
   type UsageBreakdown,
 } from '../offline/storage';
-import { blobSize } from '../offline/blobstore';
-import { ensureOfflinePackage, packageBytes } from '../offline/downloader';
-import { PMTILES_KEY } from '../offline/pmtiles-source';
+import {
+  downloadMapPackage,
+  downloadThumbsPackage,
+  mapPackageBytes,
+  thumbsPackageBytes,
+} from '../offline/downloader';
 import { renderInstallHelp } from './install-hint';
 import { progressOverlay, toast } from './toast';
 import { toUserMessage } from '../core/errors';
@@ -42,8 +48,14 @@ export interface SettingsCtx {
   onDataUpdated(): void | Promise<void>;
   /** Re-register the stored map source and rebuild the style (no reload). */
   onMapUpdated(): void | Promise<void>;
-  /** Re-point the map style at the network source (after deleting the package). */
+  /** Re-point the map style at the network source (after deleting the map). */
   onPackageRemoved(): void | Promise<void>;
+  /**
+   * Thumbnail pack changed (downloaded or deleted): redraw the list and any open
+   * card so thumbnails re-resolve from the pack (blob: URLs) or the online
+   * fallback. Independent of the map source.
+   */
+  onThumbsChanged(): void | Promise<void>;
 }
 
 // Built per-open so labels reflect the active language.
@@ -328,26 +340,118 @@ function wireStorage(body: HTMLElement): void {
   });
 }
 
+/** One offline-package row's text + behaviour, parameterised by package. */
+interface PackageRow {
+  /** data-act suffix + DOM hook (e.g. "map" → data-act="download-map"). */
+  kind: 'map' | 'thumbs';
+  titleKey: 'settings.offlineMapTitle' | 'settings.offlineThumbsTitle';
+  installedKey: 'settings.offlineMapInstalled' | 'settings.offlineThumbsInstalled';
+  notInstalledKey: 'settings.offlineMapNotInstalled' | 'settings.offlineThumbsNotInstalled';
+  downloadKey: 'settings.offlineMapDownload' | 'settings.offlineThumbsDownload';
+  deleteKey: 'settings.offlineMapDelete' | 'settings.offlineThumbsDelete';
+  deletedKey: 'settings.offlineMapDeleted' | 'settings.offlineThumbsDeleted';
+  /** Progress-overlay title while downloading. */
+  stageKey: 'offline.stageMap' | 'offline.stageThumbs';
+  /** Is this package present in IndexedDB? */
+  isDownloaded(): Promise<boolean>;
+  /** Real package size in bytes (server probe, with offline fallback). */
+  bytes(): Promise<number>;
+  /** Download the package, reporting a 0..1 fraction. */
+  download(onProgress: (f: number) => void): Promise<void>;
+  /** Delete the package. */
+  remove(): Promise<void>;
+  /** Side effect after the package is downloaded (re-point map / redraw list). */
+  afterDownload(): void | Promise<void>;
+  /** Side effect after the package is deleted (re-point map / redraw list). */
+  afterRemove(): void | Promise<void>;
+}
+
 /**
- * Render + wire the "Offline package" section: status (downloaded size / not
- * downloaded) and a single action — Download when absent, Delete when present.
- * Re-renders itself after each action so the button flips Download↔Delete.
+ * Render + wire the offline section: two independent rows — Map and Photo
+ * thumbnails — each with a status line and a single Download↔Delete button, plus
+ * a "clear photo cache" note for thumbs. Each row re-renders after its own action
+ * so the button flips; the map and thumbs packages are fully independent.
  */
 function wirePackage(body: HTMLElement, ctx: SettingsCtx): void {
   const host = body.querySelector<HTMLElement>('[data-package]');
   if (!host) return;
 
-  const render = async (): Promise<void> => {
-    const installed = (await blobSize(PMTILES_KEY)) > 0;
-    // Real package size from the server manifest (with offline fallback).
-    const mb = Math.round((await packageBytes()) / (1024 * 1024));
+  const rows: PackageRow[] = [
+    {
+      kind: 'map',
+      titleKey: 'settings.offlineMapTitle',
+      installedKey: 'settings.offlineMapInstalled',
+      notInstalledKey: 'settings.offlineMapNotInstalled',
+      downloadKey: 'settings.offlineMapDownload',
+      deleteKey: 'settings.offlineMapDelete',
+      deletedKey: 'settings.offlineMapDeleted',
+      stageKey: 'offline.stageMap',
+      isDownloaded: mapDownloaded,
+      bytes: mapPackageBytes,
+      download: (onProgress) => downloadMapPackage(onProgress),
+      remove: deleteMapPackage,
+      afterDownload: () => ctx.onMapUpdated(),
+      afterRemove: () => ctx.onPackageRemoved(),
+    },
+    {
+      kind: 'thumbs',
+      titleKey: 'settings.offlineThumbsTitle',
+      installedKey: 'settings.offlineThumbsInstalled',
+      notInstalledKey: 'settings.offlineThumbsNotInstalled',
+      downloadKey: 'settings.offlineThumbsDownload',
+      deleteKey: 'settings.offlineThumbsDelete',
+      deletedKey: 'settings.offlineThumbsDeleted',
+      stageKey: 'offline.stageThumbs',
+      isDownloaded: thumbsDownloaded,
+      bytes: thumbsPackageBytes,
+      download: (onProgress) => downloadThumbsPackage(onProgress),
+      remove: deleteThumbsPackage,
+      afterDownload: () => ctx.onThumbsChanged(),
+      afterRemove: () => ctx.onThumbsChanged(),
+    },
+  ];
 
-    host.replaceChildren();
+  // Build the two row hosts + the thumbs hint once; each renderRow only swaps
+  // the contents of its own host so the other row is never disturbed.
+  host.replaceChildren();
+  const hosts = new Map<PackageRow['kind'], HTMLElement>();
+  for (const row of rows) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'set-package-row';
+    rowEl.dataset.pkg = row.kind;
+    host.append(rowEl);
+    hosts.set(row.kind, rowEl);
+
+    if (row.kind === 'thumbs') {
+      const hint = document.createElement('div');
+      hint.className = 'set-hint';
+      hint.textContent = t('settings.offlineThumbsHint');
+      host.append(hint);
+    }
+  }
+
+  const renderRow = async (row: PackageRow): Promise<void> => {
+    const rowEl = hosts.get(row.kind);
+    if (!rowEl) return;
+
+    const installed = await row.isDownloaded();
+    const mb = Math.round((await row.bytes()) / (1024 * 1024));
+
+    rowEl.replaceChildren();
+
+    const label = document.createElement('div');
+    label.className = 'set-subhead';
+    label.textContent = t(row.titleKey);
+
     const status = document.createElement('div');
     status.className = 'set-meta';
     status.innerHTML = `
       <span class="set-meta-key">${esc(t('settings.offlineStatus'))}</span>
-      <span>${esc(installed ? t('settings.offlineInstalled', { x: `${mb}` }) : t('settings.offlineNotInstalled'))}</span>`;
+      <span>${esc(
+        installed
+          ? `${t(row.installedKey, { x: `${mb}` })} ✓`
+          : t(row.notInstalledKey),
+      )}</span>`;
 
     const actions = document.createElement('div');
     actions.className = 'set-actions';
@@ -357,28 +461,29 @@ function wirePackage(body: HTMLElement, ctx: SettingsCtx): void {
     btn.className = 'set-action';
 
     if (installed) {
-      btn.dataset.act = 'delete-package';
-      btn.innerHTML = `<span>${esc(t('settings.offlineDelete', { n: mb }))}</span>`;
-      btn.addEventListener('click', () => void onDelete());
+      btn.dataset.act = `delete-${row.kind}`;
+      btn.innerHTML = `<span>${esc(t(row.deleteKey, { n: mb }))}</span>`;
+      btn.addEventListener('click', () => void onDelete(row));
     } else {
-      btn.dataset.act = 'download-package';
-      btn.innerHTML = `<span>${esc(t('settings.offlineDownload', { n: mb }))}</span>`;
-      btn.addEventListener('click', () => onDownload());
+      btn.dataset.act = `download-${row.kind}`;
+      btn.innerHTML = `<span>${esc(t(row.downloadKey, { n: mb }))}</span>`;
+      btn.addEventListener('click', () => onDownload(row));
     }
 
     actions.append(btn);
-    host.append(status, actions);
+    rowEl.append(label, status, actions);
   };
 
-  const onDownload = (): void => {
-    const overlay = progressOverlay(t('offline.downloading'));
+  const onDownload = (row: PackageRow): void => {
+    const overlay = progressOverlay(t(row.stageKey));
     const start = (): void => {
-      ensureOfflinePackage((p, label) => overlay.update(p, label))
+      row
+        .download((f) => overlay.update(f, t(row.stageKey)))
         .then(async () => {
           overlay.close();
           toast(t('offline.done'));
-          await ctx.onMapUpdated();
-          await render();
+          await row.afterDownload();
+          await renderRow(row);
           refreshUsage(body);
         })
         .catch((e) => {
@@ -388,19 +493,19 @@ function wirePackage(body: HTMLElement, ctx: SettingsCtx): void {
     start();
   };
 
-  const onDelete = async (): Promise<void> => {
+  const onDelete = async (row: PackageRow): Promise<void> => {
     try {
-      await deletePackage();
-      await ctx.onPackageRemoved();
-      toast(t('settings.offlineDeleted'));
+      await row.remove();
+      await row.afterRemove();
+      toast(t(row.deletedKey));
     } catch (e) {
       toast(toUserMessage(e), { type: 'error' });
     }
-    await render();
+    await renderRow(row);
     refreshUsage(body);
   };
 
-  void render();
+  for (const row of rows) void renderRow(row);
 }
 
 function segment(
