@@ -131,7 +131,11 @@ async function bootstrap(): Promise<void> {
   sheet.listView.before(search.el);
 
   const drawList = (): void => {
-    renderList(sheet.listView, store.get().filtered, { userPos: userPos(), onSelect });
+    const filtered = store.get().filtered;
+    renderList(sheet.listView, filtered, { userPos: userPos(), onSelect });
+    // Keep the collapsed mobile bar's summary in sync (e.g. "263 места").
+    const n = filtered.length;
+    sheet.setSummary(`${n} ${t('list.placesWord', { n })}`);
   };
 
   const drawCard = (id: number): void => {

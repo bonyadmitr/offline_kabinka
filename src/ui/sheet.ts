@@ -24,6 +24,12 @@ export interface Sheet {
   showCard(): void;
   /** Programmatically move the mobile sheet to a snap state. */
   setState(s: SheetState): void;
+  /**
+   * Set the short summary shown on the collapsed mobile bar (e.g. "263 места").
+   * Ignored visually off mobile / when not collapsed, but kept current so it's
+   * right the moment the sheet collapses.
+   */
+  setSummary(text: string): void;
 }
 
 // Marks the app root so CSS can hide the desktop panel and shift the top-left
@@ -55,7 +61,11 @@ export function createSheet(parent: HTMLElement): Sheet {
   handle.setAttribute('role', 'button');
   handle.setAttribute('aria-label', t('sheet.resize'));
   handle.tabIndex = 0;
-  handle.innerHTML = `<span class="sheet-grabber"></span>`;
+  // Grabber + a collapsed-only summary line ("263 места"). The summary is hidden
+  // by CSS except in the collapsed state, where the list content is hidden so the
+  // bar stays a clean strip with no clipped rows.
+  handle.innerHTML = `<span class="sheet-grabber"></span><span class="sheet-summary" aria-hidden="true"></span>`;
+  const summaryEl = handle.querySelector<HTMLElement>('.sheet-summary')!;
 
   // Desktop-only header bar with a collapse button. Hidden on mobile via CSS
   // (mobile uses the drag handle / 3-state sheet instead).
@@ -129,7 +139,8 @@ export function createSheet(parent: HTMLElement): Sheet {
       ? 'height 0.32s cubic-bezier(0.22, 1, 0.36, 1)'
       : 'none';
     root.style.height = `${heightFor(s)}px`;
-    // collapsed → only the handle + first rows peek; lock inner scroll.
+    // collapsed → a clean strip: the list content is hidden by CSS (data-state)
+    // and the summary line shows instead; lock inner scroll regardless.
     scroll.style.overflowY = s === 'collapsed' ? 'hidden' : 'auto';
   }
 
@@ -138,6 +149,9 @@ export function createSheet(parent: HTMLElement): Sheet {
   let startY = 0;
   let startH = 0;
   let pointerId = -1;
+  let maxMove = 0; // largest |dy| during the gesture — distinguishes tap from drag.
+
+  const TAP_SLOP = 6; // px; movement under this on release counts as a tap.
 
   function onDown(e: PointerEvent): void {
     if (!isMobile()) return;
@@ -145,6 +159,7 @@ export function createSheet(parent: HTMLElement): Sheet {
     pointerId = e.pointerId;
     startY = e.clientY;
     startH = root.getBoundingClientRect().height;
+    maxMove = 0;
     root.style.transition = 'none';
     handle.setPointerCapture(pointerId);
   }
@@ -152,6 +167,7 @@ export function createSheet(parent: HTMLElement): Sheet {
   function onMove(e: PointerEvent): void {
     if (!dragging) return;
     const dy = startY - e.clientY; // up = positive = taller
+    maxMove = Math.max(maxMove, Math.abs(dy));
     const vh = window.innerHeight;
     const next = Math.max(COLLAPSED_PX, Math.min(vh * EXPANDED_VH, startH + dy));
     root.style.height = `${next}px`;
@@ -161,7 +177,15 @@ export function createSheet(parent: HTMLElement): Sheet {
     if (!dragging) return;
     dragging = false;
     try { handle.releasePointerCapture(pointerId); } catch { /* noop */ }
-    // Snap to nearest state by current height.
+
+    // A near-stationary press is a tap, not a drag: expand a notch (collapsed →
+    // middle → expanded) so tapping the collapsed strip opens the list.
+    if (maxMove < TAP_SLOP) {
+      cycleUp();
+      return;
+    }
+
+    // Otherwise snap to the nearest state by current height.
     const h = root.getBoundingClientRect().height;
     const candidates: SheetState[] = ['collapsed', 'middle', 'expanded'];
     let best: SheetState = 'middle';
@@ -173,18 +197,24 @@ export function createSheet(parent: HTMLElement): Sheet {
     applyState(best);
   }
 
+  // Advance one snap state upward (collapsed → middle → expanded), clamped at the
+  // top. Shared by the tap gesture and the keyboard handler.
+  function cycleUp(): void {
+    const order: SheetState[] = ['collapsed', 'middle', 'expanded'];
+    const idx = order.indexOf(state);
+    applyState(order[Math.min(order.length - 1, idx + 1)]);
+  }
+
   handle.addEventListener('pointerdown', onDown);
   handle.addEventListener('pointermove', onMove);
   handle.addEventListener('pointerup', onUp);
   handle.addEventListener('pointercancel', onUp);
 
-  // Tap the handle (no drag) cycles collapsed → middle → expanded.
+  // Keyboard: Enter/Space on the handle cycles collapsed → middle → expanded.
   handle.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
-    const order: SheetState[] = ['collapsed', 'middle', 'expanded'];
-    const idx = order.indexOf(state);
-    applyState(order[Math.min(order.length - 1, idx + 1)]);
+    cycleUp();
   });
 
   // Re-apply sizing across the mobile/desktop boundary on resize. Collapse is a
@@ -218,6 +248,9 @@ export function createSheet(parent: HTMLElement): Sheet {
     },
     setState(s: SheetState): void {
       applyState(s);
+    },
+    setSummary(text: string): void {
+      summaryEl.textContent = text;
     },
   };
 }

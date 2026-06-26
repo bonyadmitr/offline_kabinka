@@ -298,8 +298,10 @@ img {
 .sheet-handle {
   flex: 0 0 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   height: 28px;
   cursor: grab;
   touch-action: none;
@@ -314,6 +316,30 @@ img {
   height: 5px;
   border-radius: 3px;
   background: var(--border-2);
+}
+
+/* Collapsed-only summary line ("263 места"). Hidden in every other state and on
+   desktop; revealed by the collapsed rule below. */
+.sheet-summary {
+  display: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+/* Collapsed: turn the sheet into a clean strip — hide the list/card content and
+   show the summary line under the grabber. No clipped rows peek through. */
+.sheet[data-state='collapsed'] .sheet-handle {
+  height: auto;
+  padding: 10px 0 4px;
+}
+
+.sheet[data-state='collapsed'] .sheet-summary {
+  display: block;
+}
+
+.sheet[data-state='collapsed'] .sheet-scroll {
+  display: none;
 }
 
 .sheet-scroll {
