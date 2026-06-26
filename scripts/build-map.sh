@@ -17,13 +17,16 @@ cd "$(dirname "$0")/.."  # → app root
 JAVA="${JAVA:-/opt/homebrew/opt/openjdk@21/bin/java}"
 CACHE=".osm-cache"
 JAR="$CACHE/planetiler.jar"
+# Planetiler source downloads (belarus.osm.pbf, water polygons, natural earth, …) —
+# ~1.7 GB, kept OUTSIDE the app in ../maps so they are reused across rebuilds.
+SRC_DIR="../maps"
 OUT_DIR="../minsk_map"
 OUT="$OUT_DIR/minsk.pmtiles"
 # Minsk bbox with a small margin (all 263 data points fit inside): W,S,E,N
 BOUNDS="27.30,53.78,27.78,54.02"
 MAXZOOM="${MAXZOOM:-15}"
 
-mkdir -p "$OUT_DIR" "$CACHE/sources" "$CACHE/tmp" public/map
+mkdir -p "$OUT_DIR" "$SRC_DIR" "$CACHE/tmp" public/map
 
 # Resolve Java: prefer the explicit keg path, fall back to PATH java.
 if ! "$JAVA" -version >/dev/null 2>&1; then
@@ -41,7 +44,7 @@ echo "==> Building Minsk basemap (maxzoom=$MAXZOOM, bounds=$BOUNDS)"
   --download --area=belarus \
   --bounds="$BOUNDS" \
   --minzoom=0 --maxzoom="$MAXZOOM" \
-  --download-dir="$CACHE/sources" \
+  --download-dir="$SRC_DIR" \
   --tmpdir="$CACHE/tmp" \
   --output="$OUT" --force
 
