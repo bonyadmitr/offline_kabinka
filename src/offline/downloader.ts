@@ -25,6 +25,7 @@ const BASE_URL =
     : '/';
 
 const MAP_URL = BASE_URL + 'map/minsk.pmtiles';
+const MAP_VERSION_URL = BASE_URL + 'map/map-version.json';
 const THUMBS_BIN_URL = BASE_URL + 'thumbs/thumbs.bin';
 const THUMBS_INDEX_URL = BASE_URL + 'thumbs/thumbs-index.json';
 
@@ -165,6 +166,10 @@ export async function ensureOfflinePackage(
     );
     await putBlob(PMTILES_KEY, blob);
     loadedFrac.map = 1;
+    // Record the map version so the in-app "update map" check has a baseline and
+    // can correctly report "nothing to update". Best-effort: a missing/404
+    // manifest (common in dev) just leaves the marker unset.
+    await recordMapVersion();
   }
 
   // ── 2) Thumbnails: binary pack + index ──
@@ -190,6 +195,24 @@ export async function ensureOfflinePackage(
   report('offline.stageFinalize');
   await loadThumbsPackFromIDB();
   report('offline.done');
+}
+
+/**
+ * Fetch map-version.json and stash its `version` under the `mapVersion` kv key.
+ * Soft: any network/parse/404 failure is swallowed (the version check re-adopts
+ * the served version later when a stored blob is present).
+ */
+async function recordMapVersion(): Promise<void> {
+  try {
+    const res = await fetch(MAP_VERSION_URL);
+    if (!res.ok) return;
+    const manifest = (await res.json()) as { version?: string };
+    if (typeof manifest.version === 'string') {
+      await setKV('mapVersion', manifest.version);
+    }
+  } catch {
+    // best-effort; ignore
+  }
 }
 
 /** Fetch and parse the thumbnail index JSON. */
