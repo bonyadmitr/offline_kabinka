@@ -80,7 +80,13 @@ async function bootstrap(): Promise<void> {
   const eff = (): 'light' | 'dark' => effectiveTheme(store.get().theme);
 
   // ── Shell + map ──
-  const shell = await mountShell(root, { lang: store.get().mapLang, theme: eff() });
+  const shell = await mountShell(root, {
+    lang: store.get().mapLang,
+    theme: eff(),
+    // Show a visible toast when geolocation is denied/fails — on the first press
+    // and every repeat (the message already carries the GEO-01 code).
+    onGeoError: (message) => toast(message, { type: 'error' }),
+  });
   const { map, sheet } = shell;
 
   // ── Toolbar: filters button + active-conditions badge ──

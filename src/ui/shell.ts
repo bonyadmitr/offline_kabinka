@@ -33,6 +33,12 @@ export interface Shell {
 export interface ShellOpts {
   lang: 'ru' | 'en';
   theme: 'light' | 'dark';
+  /**
+   * Called when the geolocate control fails or is denied (every press, incl.
+   * repeats). main.ts wires this to a visible toast; without it the error only
+   * reaches the console.
+   */
+  onGeoError?: (message: string) => void;
 }
 
 /**
@@ -93,7 +99,12 @@ export async function mountShell(root: HTMLElement, opts: ShellOpts): Promise<Sh
 
   addZoomControls(map, mapEl);
   addGeolocate(map, {
-    onError: (err) => console.warn('[geolocate]', toUserMessage(err)),
+    onError: (err) => {
+      const message = toUserMessage(err);
+      console.warn('[geolocate]', message);
+      // Surface a visible message (e.g. permission denied) on every press.
+      opts.onGeoError?.(message);
+    },
   });
 
   return { map, sheet, toolbar, settingsCtrl, pmtilesUrl };
