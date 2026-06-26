@@ -19,7 +19,7 @@ MAXZOOM=16 bash scripts/build-map.sh      # crisper, larger file
 ```
 
 What it does:
-- Downloads the Belarus OSM extract + Natural Earth + water polygons (~1.3 GB, one-time) and caches them under `.osm-cache/sources/` (temp under `.osm-cache/tmp/`, Planetiler jar at `.osm-cache/planetiler.jar`). Re-runs reuse the cache.
+- Downloads the Belarus OSM extract + Natural Earth + water polygons (~1.7 GB, one-time) and caches them under `../maps/` (temp under `.osm-cache/tmp/`, Planetiler jar at `.osm-cache/planetiler.jar`). Re-runs reuse the cache.
 - Renders tiles `minzoom=0`..`MAXZOOM` clipped to bbox `27.30,53.78,27.78,54.02`.
 
 Outputs:

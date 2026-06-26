@@ -21,7 +21,7 @@ Steps:
    ```bash
    bash scripts/deploy.sh
    ```
-   NOTE: `scripts/deploy.sh` is created in WU10 and may not exist yet. If it is missing, that work is still pending — do not hand-roll a deploy. The script is expected to: run `npm run build`, copy the un-tracked map + thumbnail assets into `dist/`, and push `dist/` to the `gh-pages` branch (or publish via the Pages action) for `bonyadmitr.github.io/offline_kabinka`.
+   `scripts/deploy.sh` runs `npm run build`, then publishes `dist/` (with the un-tracked map + thumbnail assets it copies in) to the `gh-pages` branch by copying it into a throwaway temp dir OUTSIDE the repo and doing `git init` + `git add -A -f` + force-push. It deliberately does NOT use `npx gh-pages` — that tool's cache lives under `node_modules` and inherits the repo `.gitignore` (`*.pmtiles`, `dist`), which silently drops the 31 MB map from the deploy. One-time setup (repo `bonyadmitr/offline_kabinka` + Pages on the `gh-pages` branch) is already done.
 
 4. After it finishes, verify the live site loads with the correct base path:
    https://bonyadmitr.github.io/offline_kabinka/
