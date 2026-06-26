@@ -12,6 +12,7 @@ import { renderList, type UserPos } from './ui/list';
 import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
 import { openSettings, type SettingsCtx, type Radius, type NavigatorId } from './ui/settings';
+import { createSearch } from './ui/search';
 import {
   loadRadius,
   saveRadius,
@@ -84,6 +85,18 @@ async function bootstrap(): Promise<void> {
   };
 
   const onSelect = (id: number): void => store.set({ selectedId: id });
+
+  // ── Search box (above the list) ──
+  // Mounted as a sibling before listView so renderList()'s replaceChildren()
+  // never wipes it. Hidden while a card is open.
+  const search = createSearch({
+    value: store.get().filter.query,
+    onQuery: (q) => {
+      if (q === store.get().filter.query) return;
+      store.set({ filter: { ...store.get().filter, query: q } });
+    },
+  });
+  sheet.listView.before(search.el);
 
   const drawList = (): void => {
     renderList(sheet.listView, store.get().filtered, { userPos: userPos(), onSelect });
@@ -172,14 +185,16 @@ async function bootstrap(): Promise<void> {
       return; // the set() above re-enters the subscriber with fresh `filtered`
     }
 
-    // Selection changed → swap views.
+    // Selection changed → swap views (and hide search while a card is open).
     if (s.selectedId !== prevSelected) {
       prevSelected = s.selectedId;
       if (s.selectedId != null) {
         drawCard(s.selectedId);
         sheet.showCard();
+        search.el.hidden = true;
       } else {
         sheet.showList();
+        search.el.hidden = false;
       }
     }
   });

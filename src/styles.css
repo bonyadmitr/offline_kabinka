@@ -209,6 +209,81 @@ img {
 }
 
 /* ============================================================================
+   Search box
+   ============================================================================ */
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 4px 16px 6px;
+}
+
+.search[hidden] {
+  display: none;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 15px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 40px 0 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 16px; /* ≥16px prevents iOS zoom-on-focus */
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.search-input::placeholder {
+  color: var(--text-3);
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--border-2);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.search-clear[hidden] {
+  display: none;
+}
+
+.search-clear:active {
+  opacity: 0.7;
+}
+
+/* ============================================================================
    Nearby list
    ============================================================================ */
 .list-header {
