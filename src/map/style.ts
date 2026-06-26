@@ -289,6 +289,9 @@ export function buildStyle(opts: BuildStyleOpts): StyleSpecification {
       openmaptiles: {
         type: 'vector',
         url: `pmtiles://${pmtilesUrl}`,
+        // Required credit for OpenMapTiles-schema tiles built from OSM data.
+        attribution:
+          '© <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
       },
     },
     layers,
