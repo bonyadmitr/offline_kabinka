@@ -9,6 +9,7 @@
 //    is not evicted under storage pressure.
 
 import { t } from '../i18n';
+import { addBanner } from './banner-stack';
 
 const DISMISS_KEY = 'offline_kabinka.installHintDismissed';
 
@@ -125,7 +126,8 @@ function showBanner(): void {
   });
 
   if (canPromptInstall()) {
-    text.textContent = t('install.bannerBtn');
+    // Android / desktop: descriptive text + a working Install button.
+    text.textContent = t('install.bannerText');
     const installBtn = document.createElement('button');
     installBtn.type = 'button';
     installBtn.className = 'btn btn-primary install-action';
@@ -137,12 +139,12 @@ function showBanner(): void {
     });
     banner.append(text, installBtn, dismiss);
   } else {
-    // iOS / no prompt: textual instruction only.
+    // iOS / no prompt: textual instruction only (no non-working button).
     text.textContent = t('install.bannerIos');
     banner.append(text, dismiss);
   }
 
-  document.body.appendChild(banner);
+  addBanner(banner);
   requestAnimationFrame(() => banner.classList.add('install-visible'));
 }
 

@@ -210,6 +210,7 @@ export const ru = {
   'update.mapDone': 'Карта обновлена',
 
   // ── Install hint banner ──
+  'install.bannerText': 'Установите приложение — карта и места будут работать офлайн',
   'install.bannerIos': 'Установите приложение: Поделиться → На экран „Домой“',
   'install.bannerBtn': 'Установить',
   'install.dismiss': 'Закрыть',

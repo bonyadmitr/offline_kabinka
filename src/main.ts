@@ -35,6 +35,7 @@ import { blobSize } from './offline/blobstore';
 import { PMTILES_KEY, useStoredPmtilesIfPresent, resolvePmtilesUrl } from './offline/pmtiles-source';
 import { toast, progressOverlay } from './ui/toast';
 import { initInstallHint } from './ui/install-hint';
+import { addBanner } from './ui/banner-stack';
 
 interface AppState {
   locations: Location[];
@@ -456,12 +457,9 @@ function showOfferBanner(message: string, onAccept: () => void): void {
   later.addEventListener('click', () => banner.remove());
 
   banner.append(text, accept, later);
-  // If the install banner is already showing, stack the offer above it so the
-  // two don't overlap at the bottom of the screen.
-  if (document.querySelector('.install-banner')) {
-    banner.style.bottom = 'calc(16px + var(--safe-bottom) + 64px)';
-  }
-  document.body.appendChild(banner);
+  // Mount into the shared banner stack so the offer and the install banner stack
+  // with a gap and never overlap, whichever appears first.
+  addBanner(banner);
   requestAnimationFrame(() => banner.classList.add('offer-visible'));
 }
 

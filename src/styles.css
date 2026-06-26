@@ -1976,33 +1976,46 @@ body.modal-open {
 }
 
 /* ============================================================================
-   Offer banner (download offline package) + install banner
+   Banner stack (install hint + offline-package offer)
    ============================================================================ */
-.offer-banner,
-.install-banner {
+/* One fixed, bottom-centred column hosts all banners so they stack with a gap and
+   never overlap, regardless of which appears first. */
+.banner-stack {
   position: fixed;
   left: 50%;
   bottom: calc(16px + var(--safe-bottom));
   z-index: 1150;
-  transform: translate(-50%, 16px);
+  transform: translateX(-50%);
+  display: flex;
+  /* Reverse so the first child (newest, prepended) renders nearest the bottom. */
+  flex-direction: column-reverse;
+  gap: 8px;
+  width: min(440px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.offer-banner,
+.install-banner {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(440px, calc(100vw - 24px));
+  width: 100%;
   padding: 10px 12px;
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
+  pointer-events: auto;
   opacity: 0;
+  transform: translateY(16px);
   transition: opacity 0.22s ease, transform 0.22s var(--ease);
 }
 
 .offer-visible,
 .install-visible {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translateY(0);
 }
 
 .offer-text,

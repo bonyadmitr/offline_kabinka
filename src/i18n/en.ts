@@ -186,6 +186,7 @@ export const en = {
   'update.mapDone': 'Map updated',
 
   // ── Install hint banner ──
+  'install.bannerText': 'Install the app — the map and places work offline',
   'install.bannerIos': 'Install the app: Share → Add to Home Screen',
   'install.bannerBtn': 'Install',
   'install.dismiss': 'Dismiss',
