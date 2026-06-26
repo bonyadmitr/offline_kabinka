@@ -1,5 +1,5 @@
 import type { Location, Photo } from '../core/types';
-import { thumbUrl } from './thumb-url';
+import { lazyThumb } from './lazy-thumb';
 import { t } from '../i18n';
 
 // Full-size originals live on the public API. We deliberately load them with a plain
@@ -50,9 +50,10 @@ export function renderGallery(container: HTMLElement, location: Location): void 
     img.decoding = 'async';
     img.alt = '';
     img.draggable = false; // no native image ghost-drag (#16)
-    img.src = thumbUrl(photo.thumb);
     img.addEventListener('error', () => slide.classList.add('img-broken'));
     slide.appendChild(img);
+    // Defer src assignment until the slide enters the viewport (200 px margin).
+    lazyThumb(img, photo.thumb);
 
     slide.addEventListener('click', () => openViewer(location, i));
     track.appendChild(slide);

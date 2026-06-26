@@ -1,7 +1,7 @@
 import type { Location } from '../core/types';
 import { haversine } from '../core/geo';
 import { isOpenNow } from '../data/open-now';
-import { thumbUrl } from './thumb-url';
+import { lazyThumb } from './lazy-thumb';
 import { formatDistance, formatPrice, esc } from './format';
 import { t } from '../i18n';
 
@@ -83,7 +83,7 @@ function renderRow(
   li.innerHTML = `
     <div class="row-thumb">${
       thumb
-        ? `<img loading="lazy" decoding="async" alt="" src="${esc(thumbUrl(thumb))}" onerror="this.parentElement.classList.add('img-broken')" />`
+        ? `<img loading="lazy" decoding="async" alt="" onerror="this.parentElement.classList.add('img-broken')" />`
         : `<span class="row-thumb-ph">📷</span>`
     }</div>
     <div class="row-body">
@@ -97,6 +97,13 @@ function renderRow(
     </div>
     <div class="row-chevron">›</div>
   `;
+
+  // Wire up lazy loading after the element is in the DOM tree so the
+  // IntersectionObserver can measure its position correctly.
+  if (thumb) {
+    const img = li.querySelector<HTMLImageElement>('.row-thumb img');
+    if (img) lazyThumb(img, thumb);
+  }
 
   const fire = (): void => onSelect(loc.id);
   li.addEventListener('click', fire);
