@@ -41,8 +41,13 @@ test('renders all sections incl. device id + version', () => {
   expect(body.querySelector('[data-toggle="theme"]')).toBeTruthy();
   expect(body.querySelector('[data-seg="radius"]')).toBeTruthy();
   expect(body.querySelectorAll('[data-nav]').length).toBe(4);
-  // 5 disabled placeholders
-  expect(body.querySelectorAll('.set-action[disabled]').length).toBe(5);
+  // Only refresh-data + refresh-map remain disabled placeholders (WU8).
+  expect(body.querySelectorAll('.set-action[disabled]').length).toBe(2);
+  // WU7b activated: storage usage readout, clear-cache, reinstall, install help.
+  expect(body.querySelector('[data-usage]')).toBeTruthy();
+  expect(body.querySelector('.set-action[data-act="clear-cache"]')).toBeTruthy();
+  expect(body.querySelector('.set-action[data-act="reinstall"]')).toBeTruthy();
+  expect(body.querySelector('[data-install]')).toBeTruthy();
   expect(body.querySelector('.set-device-id')?.textContent).toBeTruthy();
 });
 

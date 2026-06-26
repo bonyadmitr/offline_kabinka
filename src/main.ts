@@ -393,6 +393,11 @@ function showOfferBanner(message: string, onAccept: () => void): void {
   later.addEventListener('click', () => banner.remove());
 
   banner.append(text, accept, later);
+  // If the install banner is already showing, stack the offer above it so the
+  // two don't overlap at the bottom of the screen.
+  if (document.querySelector('.install-banner')) {
+    banner.style.bottom = 'calc(16px + var(--safe-bottom) + 64px)';
+  }
   document.body.appendChild(banner);
   requestAnimationFrame(() => banner.classList.add('offer-visible'));
 }
