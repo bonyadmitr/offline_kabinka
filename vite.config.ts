@@ -33,15 +33,20 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Precache only the app shell. Large offline binaries (the map .pmtiles,
-        // thumbs.bin) and the dataset are loaded into IndexedDB by the WU7b loader,
-        // so they must NOT be precached here.
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Precache the app shell PLUS the small JSON payloads that must work
+        // offline: data/locations.json (~672 KB), thumbs/thumbs-index.json and
+        // map/map-version.json. The large offline binaries (the map *.pmtiles
+        // and thumbs.bin) are NOT json, so the glob never matches them — they
+        // are streamed into IndexedDB by the WU7b downloader instead.
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}'],
+        // Bump the precache budget so locations.json fits (Workbox warns/drops
+        // files larger than the 2 MiB default; ours is well under, but be safe).
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         globIgnores: [
-          '**/map/**',
-          '**/thumbs/**',
-          '**/data/**',
           '**/*.pmtiles',
+          // thumbs.bin lives under thumbs/ and is not json, but list it
+          // explicitly so it can never be pulled into the precache manifest.
+          '**/thumbs/thumbs.bin',
         ],
         navigateFallback: 'index.html',
         // Full-size photos from the card gallery: cache-first, capped + expiring.

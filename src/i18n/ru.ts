@@ -150,6 +150,50 @@ export const ru = {
   // ── Share ──
   'share.copied': 'Ссылка скопирована',
 
+  // ── Offline package / downloader ──
+  'offline.downloading': 'Загрузка офлайн-пакета',
+  'offline.retry': 'Повторить',
+  'offline.stageMap': 'Скачивание карты…',
+  'offline.stageThumbs': 'Скачивание фотографий…',
+  'offline.stageFinalize': 'Подготовка…',
+  'offline.done': 'Офлайн-пакет загружен',
+  // n = approximate megabytes.
+  'offline.offer': (p) => `Скачать офлайн-пакет (~${p.n} МБ)?`,
+  'offline.offerDownload': 'Скачать',
+  'offline.offerLater': 'Позже',
+
+  // ── Settings: storage / install (WU7b) ──
+  'settings.appSizeTitle': 'Размер приложения',
+  'settings.appSizeTotal': 'Всего',
+  'settings.appSizeMap': 'Карта',
+  'settings.appSizeThumbs': 'Фотографии (офлайн)',
+  'settings.appSizeData': 'Данные',
+  'settings.appSizePhotos': 'Кеш фото',
+  'settings.appSizeShell': 'Оболочка',
+  'settings.appSizeMeasuring': 'Подсчёт…',
+  // x = human-readable size, e.g. "12 МБ".
+  'settings.clearCacheBtn': (p) => `Очистить кеш (${p.x})`,
+  'settings.clearCacheEmpty': 'Кеш фото пуст',
+  'settings.cleared': (p) => `Освобождено ${p.x}`,
+  'settings.reinstall': 'Переустановить офлайн-пакет',
+  'settings.reinstalling': 'Переустановка…',
+  'settings.reinstalled': 'Офлайн-пакет переустановлен',
+  'settings.installTitle': 'Как установить приложение',
+  'settings.installIosSteps': 'Нажмите «Поделиться», затем «На экран „Домой“».',
+  'settings.installBtn': 'Установить',
+  'settings.installUnavailable':
+    'Откройте сайт в браузере и добавьте на главный экран через меню браузера.',
+
+  // ── Install hint banner ──
+  'install.bannerIos': 'Установите приложение: Поделиться → На экран „Домой“',
+  'install.bannerBtn': 'Установить',
+  'install.dismiss': 'Закрыть',
+
+  // ── Units ──
+  'unit.bytes': (p) => `${p.v} Б`,
+  'unit.kb': (p) => `${p.v} КБ`,
+  'unit.mb': (p) => `${p.v} МБ`,
+
   // ── Routing ──
   'route.title': 'Маршрут',
   'route.distance': 'Расстояние',

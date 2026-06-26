@@ -132,6 +132,48 @@ export const en = {
   // ── Share ──
   'share.copied': 'Link copied',
 
+  // ── Offline package / downloader ──
+  'offline.downloading': 'Downloading offline package',
+  'offline.retry': 'Retry',
+  'offline.stageMap': 'Downloading map…',
+  'offline.stageThumbs': 'Downloading photos…',
+  'offline.stageFinalize': 'Finishing…',
+  'offline.done': 'Offline package downloaded',
+  'offline.offer': (p) => `Download offline package (~${p.n} MB)?`,
+  'offline.offerDownload': 'Download',
+  'offline.offerLater': 'Later',
+
+  // ── Settings: storage / install (WU7b) ──
+  'settings.appSizeTitle': 'App size',
+  'settings.appSizeTotal': 'Total',
+  'settings.appSizeMap': 'Map',
+  'settings.appSizeThumbs': 'Photos (offline)',
+  'settings.appSizeData': 'Data',
+  'settings.appSizePhotos': 'Photo cache',
+  'settings.appSizeShell': 'Shell',
+  'settings.appSizeMeasuring': 'Measuring…',
+  'settings.clearCacheBtn': (p) => `Clear cache (${p.x})`,
+  'settings.clearCacheEmpty': 'Photo cache is empty',
+  'settings.cleared': (p) => `Freed ${p.x}`,
+  'settings.reinstall': 'Reinstall offline package',
+  'settings.reinstalling': 'Reinstalling…',
+  'settings.reinstalled': 'Offline package reinstalled',
+  'settings.installTitle': 'How to install the app',
+  'settings.installIosSteps': 'Tap "Share", then "Add to Home Screen".',
+  'settings.installBtn': 'Install',
+  'settings.installUnavailable':
+    'Open the site in a browser and add it to your home screen from the browser menu.',
+
+  // ── Install hint banner ──
+  'install.bannerIos': 'Install the app: Share → Add to Home Screen',
+  'install.bannerBtn': 'Install',
+  'install.dismiss': 'Dismiss',
+
+  // ── Units ──
+  'unit.bytes': (p) => `${p.v} B`,
+  'unit.kb': (p) => `${p.v} KB`,
+  'unit.mb': (p) => `${p.v} MB`,
+
   // ── Routing ──
   'route.title': 'Route',
   'route.distance': 'Distance',
