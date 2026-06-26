@@ -25,10 +25,14 @@
 |---|---|
 | Сборка | Vite 8 + TypeScript 6 |
 | UI | Vanilla TS, без фреймворка (pub/sub Store) |
-| Карта | MapLibre GL JS 5 + pmtiles 4 (векторные тайлы) |
+| Карта | MapLibre GL JS 5 + pmtiles 4 (векторные тайлы), ленивый чанк |
 | PWA / SW | vite-plugin-pwa 1 (Workbox) |
 | Хранилище | IndexedDB (idb 8) + собственный blobstore |
-| Тесты | Vitest 4 (83 юнит-теста) + Playwright (e2e, online + offline) |
+| Тесты | Vitest 4 (143 юнит-теста) + Playwright (e2e, online + offline) |
+
+Движок карты вынесен в ленивый чанк: входной JS грузится без MapLibre, а сам
+движок подгружается динамически уже после первого показа списка (см.
+`src/ui/scaffold.ts`, `src/ui/shell.ts`, `src/main.ts`).
 
 ---
 
@@ -44,31 +48,38 @@ npm install
 npm run dev
 ```
 
-SW отключён в dev (`devOptions.enabled: false` в `vite.config.ts`). Карта работает в онлайн-режиме из сети.
+Открыть http://localhost:5173/offline_kabinka/ (база пути — `/offline_kabinka/`).
+SW отключён в dev (`devOptions.enabled: false` в `vite.config.ts`), поэтому офлайн
+там не проверить. Превью в dev отдаются как статические файлы из `public/thumbs/`,
+карта работает онлайн из сети.
 
-### Продакшн-превью (с Service Worker и офлайн-пакетом)
+### Продакшн-превью (с Service Worker и офлайн-пакетами)
 
 ```bash
 npm run build && npm run preview
 ```
 
-Для прод-превью нужны собранные ассеты в `public/`:
-- `public/map/minsk.pmtiles` — результат `bash scripts/build-map.sh`
-- `public/thumbs/thumbs.bin` и `public/thumbs/thumbs-index.json` — результат `node scripts/pack-thumbs.mjs`
+Открыть http://localhost:4173/offline_kabinka/ . SW активен — можно принять баннер
+скачивания офлайн-пакетов и проверить работу без сети.
+
+Для полного офлайн-сценария нужны собранные ассеты в `public/`:
+- `public/map/minsk.pmtiles` (+ `public/map/map-version.json`) — результат `bash scripts/build-map.sh`
+- `public/thumbs/thumbs.bin` (+ `public/thumbs/thumbs-index.json`) — результат `node scripts/pack-thumbs.mjs`
 
 ---
 
 ## Тесты
 
-### Юнит-тесты (Vitest, 83 теста)
+### Юнит-тесты (Vitest, 143 теста)
 
 ```bash
 npx vitest run
 # или
-npm test
+npm test            # алиасы: npm run test:unit
 ```
 
-Среда: jsdom + fake-indexeddb. Без сборки.
+Среда: jsdom + fake-indexeddb. Конфиг в `vite.config.ts` (блок `test`, шаблон
+`tests/unit/**/*.test.ts`). Без сборки, ~2 c.
 
 ### E2E-тесты (Playwright)
 
@@ -81,10 +92,16 @@ npx playwright install chromium
 Запустить тесты:
 
 ```bash
-npx playwright test
+npx playwright test     # или: npm run test:e2e
 ```
 
-E2E требуют собранного проекта (`public/map/minsk.pmtiles` и `public/thumbs/thumbs.bin`). Playwright сам запускает `npm run build && npm run preview` через `webServer` в `playwright.config.ts`. Тесты работают в двух проектах: `desktop` (1280×900) и `mobile` (iPhone 13 viewport, Chromium).
+`webServer` в `playwright.config.ts` сам поднимает `npm run build && npm run
+preview -- --port 4174 --strictPort`, чтобы Service Worker был активен (он
+отключён в dev). Тесты идут в двух проектах: `desktop` (1280×900) и `mobile`
+(iPhone 13, Chromium) — по 7 тестов, всего 14. Специи: `tests/e2e/online.spec.ts`
+и `tests/e2e/offline.spec.ts` (регистрация SW → скачивание пакетов в IndexedDB →
+офлайн → перезагрузка → проверка списка из прекэша, наличия canvas карты и
+`blob:`-URL у превью).
 
 ---
 
@@ -96,7 +113,9 @@ E2E требуют собранного проекта (`public/map/minsk.pmtile
 node scripts/build-data.mjs
 ```
 
-Делает запросы к `kabinka.by/api/v1`: список → детали → комментарии. Пишет в `public/data/locations.json`.
+Делает запросы к `kabinka.by/api/v1`: список → детали → комментарии. Пишет в
+`public/data/locations.json` (сейчас ~263 локации). Заголовок `X-Device-ID`
+проставляется автоматически — id хранится в `scripts/.device_id` (gitignored).
 
 Переменные окружения:
 - `LIMIT=N` — обработать только первые N локаций (отладка)
@@ -108,15 +127,16 @@ node scripts/build-data.mjs
 
 ```bash
 brew install openjdk@21
-```
-
-```bash
 bash scripts/build-map.sh
 ```
 
-Скачивает OSM Беларуси + water-polygons (~1.3 ГБ, кэшируется в `.osm-cache/`), строит `minsk.pmtiles` через Planetiler, кладёт файл в `../minsk_map/` и копирует в `public/map/`. Карта не коммитится в git.
+Скачивает OSM Беларуси + Natural Earth + water-polygons (~1.3–1.7 ГБ, кэшируется в
+`../maps` вне репозитория) и строит `minsk.pmtiles` через Planetiler, обрезая по
+bbox Минска. Файл и `map-version.json` кладутся в `../minsk_map/` и копируются в
+`public/map/`. Карта не коммитится в git.
 
-Переменная окружения: `MAXZOOM=16` — увеличить детализацию (крупнее файл; по умолчанию 15).
+Переменная окружения: `MAXZOOM` (по умолчанию 15; `16` — крупнее и детальнее, `14`
+— мельче). Итоговый архив при `MAXZOOM=15` весит ~31 МБ.
 
 ### Упаковать превью
 
@@ -124,8 +144,9 @@ bash scripts/build-map.sh
 node scripts/pack-thumbs.mjs
 ```
 
-Читает `../thumbs/*.jpg`, пишет `public/thumbs/thumbs.bin` и `public/thumbs/thumbs-index.json`.  
-Исходные JPEG лежат за пределами репозитория (`~/Downloads/OfflineMaps/thumbs/`).
+Читает `../thumbs/*.jpg`, пишет `public/thumbs/thumbs.bin` (1088 превью) и
+`public/thumbs/thumbs-index.json`. Исходные JPEG лежат за пределами репозитория
+(`~/Downloads/OfflineMaps/thumbs/`).
 
 ---
 
@@ -135,14 +156,24 @@ node scripts/pack-thumbs.mjs
 bash scripts/deploy.sh
 ```
 
-Собирает продакшн-бандл и публикует `dist/` в ветку `gh-pages` через `npx gh-pages`. Большие бинарники (карта, thumbs.bin) не коммитятся в `main` — они попадают только в `gh-pages` через `dist/`.
+Скрипт собирает прод-бандл (`npm run build`) и публикует содержимое `dist/` в ветку
+`gh-pages` **из временной папки вне репозитория**: `git init` → `git add -A -f` →
+force-push. Флаг `-f` принудительно добавляет файлы мимо `.gitignore` (где числятся
+`*.pmtiles`, `public/map/`, `dist` …) — иначе игнор-правила молча выкинули бы 31 МБ
+карты из деплоя. Поэтому здесь **не** `npx gh-pages`: его кэш живёт под
+`node_modules` и наследует те же игнор-правила (см. [проблему 8](docs/problems-and-solutions.md)).
 
-Требования перед деплоем:
+Требования перед деплоем (скрипт их проверяет):
 - `public/map/minsk.pmtiles` собран
 - `public/thumbs/thumbs.bin` собран
+- `gh auth status` — активный аккаунт `bonyadmitr`
 - GitHub Pages репозитория [bonyadmitr/offline_kabinka](https://github.com/bonyadmitr/offline_kabinka) настроен на ветку `gh-pages`
 
 > Одноразовая настройка (создание репозитория + Pages) уже выполнена.
+
+Ветка `main` не содержит больших бинарников — они попадают только в `gh-pages`
+через `dist/`. Каждый деплой — свежий одиночный коммит с force-push, поэтому
+`gh-pages` не накапливает старые 31 МБ-блобы.
 
 ---
 
@@ -150,14 +181,16 @@ bash scripts/deploy.sh
 
 По сравнению с нативным приложением Kabinka PWA добавляет:
 
-- **Офлайн-фильтрация** — вся фильтрация и поиск клиентские, работают без сети
+- **Офлайн-фильтрация и поиск** — вся фильтрация и поиск клиентские, работают без сети
 - **Офлайн «открыто сейчас»** — считается по расписанию из базы в зоне Europe/Minsk
 - **Офлайн расстояния** — haversine от текущего положения
 - **Зум-кнопки на мобиле** — MapLibre по умолчанию их не добавляет
 - **Поиск по названию и адресу**
 - **Шаринг-ссылка** — `#id=NN` deep-link, открывает конкретную точку
-- **Гибридный маршрут** — офлайн: прямая линия + компас; онлайн: deep-link в Яндекс/Google/Apple Maps
+- **Маршрут** — навигатор (Яндекс Карты/Навигатор, Google, Apple) + офлайн-компас (линия и азимут)
+- **Тема система/светлая/тёмная** — следует за системной по умолчанию
 - **Упакованные превью** — 1088 фото в одном `thumbs.bin`, без сетевых запросов офлайн
+- **Два независимых офлайн-пакета** — карта и фото-превью качаются/удаляются раздельно
 - **IDB-blob хранилище** — карта и превью в IndexedDB, чтение диапазонами через `blob.slice()`
 
 ---
@@ -166,4 +199,4 @@ bash scripts/deploy.sh
 
 - [docs/architecture.md](docs/architecture.md) — структура модулей, поток данных, AppState
 - [docs/offline-and-ios.md](docs/offline-and-ios.md) — офлайн-стратегия, iOS-нюансы, персистентность
-- [docs/problems-and-solutions.md](docs/problems-and-solutions.md) — 13 конкретных проблем и их решений
+- [docs/problems-and-solutions.md](docs/problems-and-solutions.md) — конкретные проблемы и их решения

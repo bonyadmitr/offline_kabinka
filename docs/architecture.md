@@ -2,7 +2,16 @@
 
 ## Обзор
 
-Приложение — ванильный TypeScript без UI-фреймворка. Точка входа: `src/main.ts`. Состояние хранится в единственном `Store<AppState>` с pub/sub подписками. Карта — MapLibre GL JS с векторными тайлами через pmtiles. Сервис-воркер (Workbox) прекэширует оболочку; большие бинарники живут в IndexedDB.
+Приложение — ванильный TypeScript без UI-фреймворка. Точка входа: `src/main.ts`.
+Состояние хранится в единственном `Store<AppState>` с pub/sub подписками. Карта —
+MapLibre GL JS с векторными тайлами через pmtiles. Сервис-воркер (Workbox)
+прекэширует оболочку; большие бинарники живут в IndexedDB.
+
+Движок карты вынесен в **ленивый чанк**: `src/ui/scaffold.ts` строит весь DOM
+(лист/тулбар/настройки + пустой `#map`) синхронно и без импорта MapLibre, а
+`src/main.ts` динамически импортирует `src/ui/shell.ts` (и весь MapLibre-стек) уже
+после первого рендера списка. Входной JS-чанк получается небольшим (~90 КБ),
+тяжёлый map-чанк (~1 МБ) грузится отдельно.
 
 ---
 
@@ -10,12 +19,12 @@
 
 ```
 src/
-├── core/           Типы, ошибки, Store, утилиты
+├── core/           Типы, ошибки, Store, тема, утилиты, настройки
 ├── data/           Репозиторий, IDB, фильтрация, diff, расписание
 ├── map/            Карта MapLibre, стиль, маркеры, контролы
-├── offline/        Blobstore, downloader, pmtiles-source, thumbs, storage
+├── offline/        Blobstore, downloader, pmtiles-source/key, thumbs, storage, sw-register
 ├── update/         Обновление данных и карты
-├── routing/        Гибридный маршрут (линия + компас + deep-links)
+├── routing/        Маршрут: deep-link в навигатор + офлайн-компас
 ├── ui/             Вся разметка и взаимодействие
 ├── i18n/           Переводы (ru + en)
 └── main.ts         Склейка всего вышеперечисленного
@@ -41,7 +50,7 @@ src/
 | Код | Значение |
 |---|---|
 | NET-01 | Нет интернета |
-| NET-02 | Таймаут сервера |
+| NET-02 | Сервер долго не отвечает |
 | API-01 | Сервер обновления недоступен |
 | API-02 | Не удалось разобрать ответ |
 | MAP-01 | Не удалось скачать карту |
@@ -66,11 +75,20 @@ class Store<T extends object> {
 
 Используется один экземпляр `Store<AppState>` в `main.ts`.
 
+### `theme.ts`
+
+Предпочтение темы — **`'system' | 'light' | 'dark'`**, отдельно от *эффективной*
+темы (`'light' | 'dark'`), которая и применяется:
+
+- `systemPrefersDark()` — читает `matchMedia('(prefers-color-scheme: dark)')`
+- `effectiveTheme(pref)` — резолвит `'system'` в текущую системную, иначе фиксирует
+- `watchSystemTheme(cb)` — подписка на смену системной схемы (live-переключение, когда выбрано `'system'`); возвращает функцию отписки
+
 ### `device.ts`, `geo.ts`, `settings.ts`
 
-- `getDeviceId()` — UUID в `localStorage`, нужен для заголовка `X-Device-ID` при запросах к API
-- `haversine()`, `bearing()` — WGS84-расстояние и азимут для офлайн-расстояний и компаса
-- `loadRadius()` / `saveRadius()`, `loadNavigator()` / `saveNavigator()` — персистентные пользовательские настройки
+- `getDeviceId()` — UUID в `localStorage` (`crypto.randomUUID()`), нужен для заголовка `X-Device-ID` при запросах к API
+- `haversine()`, `bearing()` — WGS84-расстояние (в метрах) и азимут (0–360°) для офлайн-расстояний и компаса
+- `loadTheme()` / `saveTheme()` (дефолт `'system'`), `loadNavigator()` / `saveNavigator()` (дефолт `'yandex_maps'`), `hasChosenNavigator()` — персистентные настройки в `localStorage`
 
 ---
 
@@ -87,22 +105,28 @@ class Store<T extends object> {
 
 ### `repository.ts`
 
-- `loadLocations()` — сначала читает из IDB (`kv.locations`); если нет — загружает `public/data/locations.json` (baseline, прекэширован SW)
-- `saveLocations(arr)` — сохраняет в IDB
+- `loadLocations()` — сначала читает из IDB (`kv.locations`); если пусто — загружает `public/data/locations.json` (baseline, прекэширован SW)
+- `saveLocations(arr)` — сохраняет в IDB (+ `locationsUpdatedAt`)
 
 ### `filter.ts`
 
-`applyFilters(list, filter)` — полностью клиентская: поиск по названию/адресу, фильтры по типу, цене, доступности, тегам, рейтингу, «открыто сейчас».
+`applyFilters(list, filter)` — полностью клиентская: поиск по названию/адресу,
+фильтры по типу, цене, доступности, тегам (логика «любой из выбранных»),
+рейтингу, «открыто сейчас». `defaultFilter()` — пустой фильтр.
 
 ### `open-now.ts`
 
-`isOpenNow(working_hours)` — вычисляет текущее состояние по расписанию. Временная зона Europe/Minsk (UTC+3, постоянно). Поддерживает overnight-окна (close < open), перерывы.
+`isOpenNow(working_hours)` — вычисляет текущее состояние по расписанию. Временная
+зона Europe/Minsk (UTC+3, постоянно). Поддерживает overnight-окна (close < open) и
+перерывы (`break_start` / `break_end`).
 
 `minskNow(date?)` — текущее время в Минске через `Intl.DateTimeFormat`.
 
 ### `diff.ts`
 
-`diffLocations(oldArr, newArr)` → `{ added, removed, changed }` (массивы id). Используется при обновлении данных для отчёта о количестве изменений.
+`diffLocations(oldArr, newArr)` → `{ added, removed, changed }` (массивы id).
+Поле `distance_meters` исключено через `VOLATILE_FIELDS`, чтобы серверное значение
+не давало ложных «изменений». Используется при обновлении данных для отчёта.
 
 ---
 
@@ -110,27 +134,46 @@ class Store<T extends object> {
 
 ### `map.ts`
 
-- `createMap(container, style)` — создаёт `maplibregl.Map` с центром Минска (27.5667, 53.9023), zoom 12, minZoom 9, maxZoom 16, maxBounds = bbox Минска (27.30–27.78 / 53.78–54.02)
-- `registerPmtiles()` — регистрирует `pmtiles` протокол в MapLibre (`maplibregl.addProtocol('pmtiles', p.tile.bind(p))`); вызывается ровно один раз через флаг `__registered`
+- `createMap(container, style)` — создаёт `maplibregl.Map` с центром Минска (27.5667, 53.9023), zoom 12, minZoom 9, **maxZoom 16**, maxBounds = bbox Минска (27.30–27.78 / 53.78–54.02). Атрибуция показывается развёрнуто (`attributionControl: { compact: false }`)
+- `registerPmtiles()` — регистрирует `pmtiles` протокол в MapLibre (`maplibregl.addProtocol('pmtiles', p.tile.bind(p))`); ровно один раз через флаг `__registered`
 - `getProtocol()` — общий синглтон `Protocol` для сетевых и IDB-источников
 - `setMapLanguage(map, lang)` — меняет `text-field` у слоёв `LABEL_LAYER_IDS` через `coalesce([name:ru/name:en], [name])`
 
+> `maxZoom` карты — 16, но сам архив строится с `maxzoom=15` (`scripts/build-map.sh`):
+> на z16 MapLibre дотягивает тайлы overzoom-ом. См. [проблему 9](problems-and-solutions.md).
+
 ### `style.ts`
 
-`buildStyle({ lang, theme, pmtilesUrl })` — собирает `StyleSpecification` (OpenMapTiles-схема):
+`buildStyle({ lang, theme, pmtilesUrl })` — собирает `StyleSpecification`
+(OpenMapTiles-схема):
 
 - Источник: `pmtiles://<pmtilesUrl>` (подставляет bare key `minsk` или сетевой URL)
-- Шрифты: `https://demotiles.maplibre.org/font/...` (требует сеть; TODO: хостить локально)
-- Атрибуция: OpenMapTiles + OpenStreetMap (обязательна по лицензии)
-- Темы: light / dark — разные палитры для фона, воды, дорог, зданий, текста
+- Глифы: **локальные** — `GLYPHS_URL = BASE_URL + 'fonts/{fontstack}/{range}.pbf'` (шрифт `Noto Sans Regular` из `public/fonts/`, прекэшируется SW). Работает офлайн, без внешнего сервера
+- Атрибуция: «© OpenMapTiles © OpenStreetMap contributors» — задана прямо на источнике (обязательна по лицензии)
+- Темы: `light` / `dark` — разные палитры (`PALETTE`) для фона, воды, дорог, зданий, текста. `theme` здесь — уже *эффективная* тема
 
 ### `markers.ts`, `controls.ts`
 
-Маркеры точек с цветом по типу цены, рейтингом, кластеризацией. Контролы: zoom (включая мобайл), геолокация.
+`markers.ts` — источник `points` с кластеризацией (`cluster: true`, `clusterRadius
+50`, `clusterMaxZoom 14`): слои кластеров со счётчиком, одиночные точки с цветом по
+типу цены (зелёный/синий/фиолетовый) и подписью рейтинга. Клик по точке →
+`onSelect`, клик по кластеру → зум к expansion-zoom.
+
+`controls.ts` — кастомные контролы (не штатные MapLibre): кнопки зума `+`/`−`
+(в т.ч. на мобиле) и геолокация (`navigator.geolocation`, слой точки пользователя +
+круг точности). Ошибка/отказ геолокации → `AppError('GEO-01')` через колбэк
+`onError`.
 
 ---
 
 ## `offline/` — офлайн-хранилище
+
+### `pmtiles-key.ts`
+
+Один экспорт — константа `PMTILES_KEY = 'minsk'` (ключ карты в IndexedDB).
+Вынесена в отдельный модуль без зависимостей нарочно: `downloader`/`storage`/
+`map-update` импортируют только её и не тянут за собой `pmtiles-source.ts` (→
+MapLibre) в свой чанк.
 
 ### `blobstore.ts`
 
@@ -154,29 +197,66 @@ getKey(): string           // → 'minsk'
 getBytes(offset, length)   // → blob.slice(offset, offset+length).arrayBuffer()
 ```
 
-`useStoredPmtilesIfPresent(key)` — если Blob в IDB есть, регистрирует его на `Protocol` и возвращает bare key.  
-`resolvePmtilesUrl(key)` — возвращает bare key (`'minsk'`) или сетевой URL (`BASE_URL + 'map/minsk.pmtiles'`).  
+`useStoredPmtilesIfPresent(key)` — если Blob в IDB есть, регистрирует его на
+`Protocol` и возвращает bare key.  
+`resolvePmtilesUrl(key)` — возвращает bare key (`'minsk'`) или сетевой URL
+(`BASE_URL + 'map/minsk.pmtiles'`).  
 `buildStyle()` добавляет префикс `pmtiles://` к тому, что вернул `resolvePmtilesUrl`.
 
 ### `downloader.ts`
 
-`downloadToBlob(url, onProgress)` — стриминг в Blob с stall-таймаутом (60 с). При офлайн — `NET-01`, при таймауте — `NET-02`.
+`downloadToBlob(url, onProgress, notOkCode?)` — стриминг в Blob со *stall*-таймаутом
+(60 с, сбрасывается на каждом чанке). При офлайн — `NET-01`, при таймауте — `NET-02`.
 
-`ensureOfflinePackage(onProgress)` — скачивает карту и thumbs.bin, если их нет в IDB. Прогресс взвешен по размерам файлов. Порядок: 1) карта → 2) thumbs.bin + индекс → 3) гидрация in-memory пакета.
+Два независимых пакета качаются раздельно:
+- `downloadMapPackage(onProgress)` — стримит `minsk.pmtiles` в IDB и пишет маркер версии
+- `downloadThumbsPackage(onProgress)` — стримит `thumbs.bin` в IDB, тянет и сохраняет индекс, гидрирует in-memory пакет
 
-`loadThumbsPackFromIDB()` — при запуске: читает Blob + индекс из IDB, вызывает `setPack()` для in-memory кэша object URL.
+`ensureOfflinePackage(onProgress)` — скачивает оба пакета, пропуская уже скачанные;
+прогресс взвешен по размерам. Порядок: 1) карта → 2) thumbs.bin + индекс → 3)
+гидрация in-memory пакета.
+
+`loadThumbsPackFromIDB()` — при запуске: читает Blob + индекс из IDB и передаёт их в
+`setPack()` (Blob **не** читается целиком в память).
+
+Размеры для лейблов кнопок: `mapPackageBytes()` (из `map-version.json`),
+`thumbsPackageBytes()` (HEAD за Content-Length), `packageBytes()`,
+`pendingPackageBytes()` — каждый с офлайн-фолбэком на известные значения.
 
 ### `thumbs.ts`
 
-`setPack(buf, index)` — регистрирует распакованный `ArrayBuffer` + `ThumbIndex` (map: имя → [offset, length]).  
-`getThumbObjectUrl(name)` — нарезает JPEG из буфера, создаёт object URL, кэширует.  
+Пакет превью держится как **ленивый Blob** прямо из IndexedDB (не `ArrayBuffer`),
+так что ~8.3 МБ не висят в JS-heap всю сессию (важно для iOS).
+
+`setPack(blob, index)` — регистрирует Blob + `ThumbIndex` (имя → [offset, length]).  
+`getThumbObjectUrl(name)` — режет JPEG через `blob.slice(offset, len)` (лениво) и
+кэширует object URL.  
+`clearPack()` — сбрасывает пакет и отзывает object URL'ы (при удалении превью).  
 `sliceFromIndex(buffer, index, name)` — чистая функция нарезки, тестируется отдельно.
 
 ### `storage.ts`
 
-`estimateUsage()` → `{ total, breakdown: { map, thumbs, data, photos, shell } }` (байты).  
-`clearTransient()` — удаляет Workbox-кэш `photos` (полноразмерные фото).  
-`reinstallPackage(onProgress)` — удаляет Blob-ы и маркеры версий, перезапускает `ensureOfflinePackage`.
+`estimateUsage()` → `{ total, breakdown: { map, thumbs, data, photos, shell },
+photosEstimated }` (байты). Размер считается **точно** — по реальным размерам
+blob-ов из IDB и читаемых ответов Cache, а **не** через
+`navigator.storage.estimate().usage` (Chrome раздувал opaque-фото до ~537 МБ).
+Фото — единственная оценочная корзина (entry count × номинал), отсюда флаг
+`photosEstimated`.
+
+`clearTransient()` — удаляет Workbox-кэш `photos` (полноразмерные фото), возвращает
+освобождённые байты.  
+`deleteMapPackage()` — удаляет blob карты + маркер версии.  
+`deleteThumbsPackage()` — удаляет blob превью + индекс и сбрасывает in-memory пакет
+(`clearPack`).  
+`deletePackage()` — удаляет оба пакета (карта + превью).  
+`mapDownloaded()` / `thumbsDownloaded()` — есть ли пакет в IDB. `formatBytes()` —
+человекочитаемый размер.
+
+### `sw-register.ts`
+
+`registerServiceWorker()` — тонкая обёртка над `registerSW` из
+`virtual:pwa-register` (`injectRegister: 'auto'`, `registerType: 'autoUpdate'`).
+Импортируется из `main.ts` динамически **только в PROD** (в dev SW нет).
 
 ---
 
@@ -184,23 +264,40 @@ getBytes(offset, length)   // → blob.slice(offset, offset+length).arrayBuffer(
 
 ### `data-update.ts`
 
-In-app синхронизация с kabinka.by API: список → детали → комментарии → diff → сохранение. Поддерживает прерывание через `AbortSignal` с частичным сохранением (уже обновлённые записи не теряются).
+In-app синхронизация с `kabinka.by/api/v1`: список (`per_page=500`) → детали →
+комментарии → merge → `diffLocations` → сохранение. Заголовок `X-Device-ID`
+обязателен. Поддерживает прерывание через `AbortSignal` с частичным сохранением
+(уже обновлённые записи не теряются).
 
 ### `map-update.ts`
 
-`checkMapUpdate()` — сравнивает версию из `map-version.json` с маркером в IDB.  
-`updateMap(onProgress)` — скачивает новый `.pmtiles`, сохраняет, обновляет маркер. Caller перестраивает стиль без перезагрузки страницы.
+`checkMapUpdate()` — сравнивает версию из `map-version.json` с маркером
+`mapVersion` в IDB (мягко на ошибках/офлайне; если маркера нет, но blob карты уже
+есть — принимает текущую версию).  
+`updateMap(onProgress)` — скачивает новый `.pmtiles`, делает sanity-check по магии
+`PMTiles` (иначе `MAP-02`), сохраняет, обновляет маркер. Caller перестраивает стиль
+без перезагрузки страницы.
 
 ---
 
 ## `routing/` — маршрут
 
-Гибридный режим:
+Две независимые кнопки в панели маршрута, ни одна не блокирует другую:
 
-- **Офлайн (всегда):** прямая линия user→destination на карте (`GeoJSON LineString`), панель с расстоянием и азимутом, стрелка-компас (`DeviceOrientationEvent`, `webkitCompassHeading` на iOS).
-- **Онлайн (deep-links):** кнопки открытия в Яндекс Картах / Яндекс Навигаторе / Google / Apple Maps.
+- **«Открыть в навигаторе»** (нужна сеть / приложение навигатора): deep-link в
+  Яндекс Карты / Яндекс Навигатор / Google / Apple. В первый раз спрашивает, какой
+  навигатор использовать, и запоминает выбор (`saveNavigator`); дальше открывает
+  сразу. Есть кнопка «Сменить навигатор». Если известна позиция пользователя —
+  передаёт обе точки (откуда→куда), иначе только пункт назначения.
+- **«Компас»** (офлайн): рисует прямую линию user→destination (`GeoJSON
+  LineString`), вписывает её в кадр и показывает расстояние + азимут со
+  стрелкой-компасом (`DeviceOrientationEvent`, `webkitCompassHeading` на iOS).
+  Нужна позиция пользователя — если её нет, дёргает `onNeedGeo` (без блокировки
+  навигатора).
 
-Функции `googleUrl`, `yandexUrl`, `yandexNaviUrl`, `appleUrl` — чистые, покрыты тестами.
+Чистые билдеры ссылок `googleUrl`, `yandexUrl`, `yandexNaviUrl`, `appleUrl`,
+`navigatorUrl` покрыты тестами. Одна сессия компаса за раз; «Скрыть маршрут»
+сносит линию, панель и слушатель ориентации.
 
 ---
 
@@ -208,26 +305,33 @@ In-app синхронизация с kabinka.by API: список → детал
 
 | Файл | Назначение |
 |---|---|
-| `shell.ts` | Монтирование корня: `#map`, toolbar, sheet |
-| `sheet.ts` | Bottom-sheet (мобайл: 3 состояния) / боковая панель 400px (десктоп) |
+| `scaffold.ts` | Синхронный DOM-каркас без MapLibre: пустой `#map`, тулбар (фильтры), кнопка настроек, host под sheet. Сюда первым делом рисуется список |
+| `shell.ts` | MapLibre-слой (ленивый чанк): `attachMap()` создаёт карту в `#map`, контролы, резолвит источник pmtiles |
+| `sheet.ts` | Мобайл: bottom-sheet с 3 состояниями + drag; десктоп: фиксированная левая панель, сворачивается (карта на весь экран) и открывается кнопкой «Показать список» |
 | `list.ts` | Список локаций с расстояниями |
 | `card.ts` | Карточка локации: данные, фото, маршрут, шаринг |
-| `gallery.ts` | Карусель фото + полноэкранный просмотр + pinch-zoom |
-| `filters.ts` | Модальное окно фильтров |
-| `settings.ts` | Настройки: язык UI/карты, тема, навигатор, радиус, обновление данных/карты |
+| `gallery.ts` | Карусель фото (стрелки ‹ ›, `draggable=false`) + полноэкранный просмотр + pinch/double-tap zoom + swipe |
+| `lazy-thumb.ts` | Ленивая загрузка превью через общий `IntersectionObserver` (rootMargin 200px): `src` ставится при входе в кадр |
+| `thumb-url.ts` | Резолвер превью: IDB-пакет (object URL) → dev-файл → онлайн-фолбэк |
+| `filters.ts` | Модальное окно фильтров; применяются по кнопке «Применить» (+ «Сбросить») |
+| `settings.ts` | Настройки: язык UI/карты, тема (система/светлая/тёмная), навигатор, размер приложения, два офлайн-пакета, установка, обновление данных/карты |
 | `search.ts` | Поле поиска по названию и адресу |
 | `share.ts` | Web Share API + clipboard fallback, deep-link `#id=NN` |
 | `toast.ts` | Тосты + оверлей прогресса загрузки |
-| `install-hint.ts` | Подсказка установки PWA (iOS / beforeinstallprompt) |
-| `thumb-url.ts` | Резолвер превью: IDB-пакет → dev-URL → онлайн |
+| `modal.ts` | Лёгкий доступный модал/боттом-шит (body + footer, focus-trap, Esc/клик по фону) |
+| `format.ts` | `formatDistance`, `formatPrice`, `esc` (экранирование для innerHTML) |
+| `install-hint.ts` | Подсказка установки PWA (iOS-инструкция / `beforeinstallprompt`) + запрос `storage.persist()` |
+| `banner-stack.ts` | Общий нижний стек баннеров (установка + оффер пакета не перекрывают друг друга) |
 
 ---
 
 ## `i18n/`
 
-`t(key, vars?)` — функция перевода. Активный словарь переключается через `setLang(lang)` (сохраняется в `localStorage`).  
-`ru.ts` — полный словарь.  
-`en.ts` — каркас (переводы ключевых строк обвязки).
+`t(key, params?)` — функция перевода с **фолбэком на русский** для непереведённых
+ключей. Активный словарь переключается через `setLang(lang)` (хранится в
+`localStorage` под `offline_kabinka.uiLang`).  
+`ru.ts` — полный словарь (источник правды).  
+`en.ts` — почти полный (несколько строк добираются фолбэком на `ru`).
 
 ---
 
@@ -236,28 +340,32 @@ In-app синхронизация с kabinka.by API: список → детал
 ```
 bootstrap()
   │
-  ├── registerServiceWorker()          (только PROD, async)
-  ├── loadThumbsPackFromIDB()          (fire-and-forget, thumbsReady)
-  ├── Store<AppState> = new Store(...)
+  ├── registerServiceWorker()          (только PROD, динамический импорт)
+  ├── loadThumbsPackFromIDB()          (fire-and-forget → thumbsReady)
+  ├── Store<AppState> = new Store(...) (theme=loadTheme(), navigator=loadNavigator())
   │
-  ├── mountShell(root, opts)
-  │     └── resolvePmtilesUrl()        → IDB blob key или сетевой URL
+  ├── mountScaffold(root, { theme })   синхронный DOM без MapLibre
   │
   ├── loadLocations()                  → IDB → locations.json (SW-кэш)
-  ├── await thumbsReady                ← ждём пакет превью
-  ├── drawList()                       первый рендер
+  ├── await thumbsReady                ← ждём пакет превью перед первым рендером
+  ├── drawList()                       первый рендер (карта ещё не загружена)
   │
-  ├── map.once('load', initMarkers)
-  ├── selectFromHash()                 deep-link
-  └── maybeOfferOfflinePackage()       оффер если пакет не скачан
+  ├── selectFromHash()                 deep-link #id=NN
+  ├── initInstallHint()                баннер установки + storage.persist()
+  ├── maybeOfferOfflinePackage()       оффер, если карта не скачана
+  │
+  └── attachMapStack()                 ленивый import MapLibre-стека:
+        ├── attachMap(mapEl, …)        создаёт карту (IDB-blob или сеть)
+        ├── addMarkers() on 'load'
+        └── дренаж отложенных flyTo/route
 ```
 
 ---
 
 ## Ключевые ограничения
 
-- Шрифты карты подключаются с `demotiles.maplibre.org` — нужна сеть для первой загрузки (см. `style.ts` TODO)
-- Полноразмерные фото загружаются с `kabinka.by/storage/` без доп. заголовков — кэшируются SW CacheFirst до 300 фото, 30 дней
+- Глифы и данные (`locations.json`, индексы) — в прекэше SW; работают офлайн с первого запуска
+- Полноразмерные фото грузятся с `kabinka.by/storage/` без доп. заголовков — кэшируются SW CacheFirst до 300 фото, 30 дней
 - Карта и thumbs.bin не в git, собираются и деплоятся локально
 
 ---
