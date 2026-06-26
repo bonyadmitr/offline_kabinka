@@ -52,6 +52,24 @@ export function setPack(buf: ArrayBuffer, idx: ThumbIndex): void {
 }
 
 /**
+ * Drop the in-memory pack and revoke any object URLs it produced. Called when
+ * the offline package is deleted so list/card thumbnails fall back to the
+ * online URL (or the gallery placeholder when offline) instead of pointing at
+ * freed blobs.
+ */
+export function clearPack(): void {
+  pack = null;
+  for (const url of urlCache.values()) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
+  urlCache.clear();
+}
+
+/**
  * Get an object URL for the named thumbnail from the loaded pack.
  * Returns null if the pack is not loaded yet or the name is absent —
  * the UI then falls back to the dev URL from src/ui/thumb-url.ts.
