@@ -38,7 +38,13 @@ touch "$TMP/.nojekyll"   # serve files as-is (no Jekyll processing)
   git checkout -q -b gh-pages
   git add -A -f .          # -f: force past any inherited .gitignore (keeps minsk.pmtiles)
   git -c user.name=deploy -c user.email=deploy@local commit -qm "deploy $(date '+%Y-%m-%d %H:%M')"
-  git push -q -f "$REPO_URL" gh-pages
+  # Large (~40 MB) one-shot push: bump postBuffer so the RPC isn't cut ("curl 55
+  # broken pipe"); retry a couple times for transient disconnects.
+  git config http.postBuffer 524288000
+  n=0; until git push -f "$REPO_URL" gh-pages; do
+    n=$((n+1)); [ "$n" -ge 3 ] && { echo "ERROR: gh-pages push failed after $n attempts" >&2; exit 1; }
+    echo "push failed, retry $n…" >&2
+  done
 )
 rm -rf "$TMP"
 
