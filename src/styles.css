@@ -210,6 +210,14 @@ img {
   display: none;
 }
 
+/* renderList()/renderCard() overwrite the container className (dropping .sheet-view),
+   so honour [hidden] on the concrete views too — otherwise .card{display:flex} keeps a
+   hidden card laid out. */
+.card[hidden],
+.list[hidden] {
+  display: none;
+}
+
 /* ============================================================================
    Search box
    ============================================================================ */
