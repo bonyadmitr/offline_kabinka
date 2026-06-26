@@ -10,7 +10,6 @@ export type Dict = Record<string, string | ((p: Record<string, unknown>) => stri
 
 export const ru = {
   // ── Common buttons / generic ──
-  'common.apply': 'Применить',
   'common.reset': 'Сбросить',
   'common.back': 'Назад',
   'common.close': 'Закрыть',

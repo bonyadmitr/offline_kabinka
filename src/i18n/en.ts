@@ -7,7 +7,6 @@ import type { Dict } from './ru';
 
 export const en = {
   // ── Common buttons / generic ──
-  'common.apply': 'Apply',
   'common.reset': 'Reset',
   'common.back': 'Back',
   'common.close': 'Close',
