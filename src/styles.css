@@ -1,0 +1,51 @@
+/* Map control buttons */
+.map-ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #333333;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.15s;
+}
+
+.map-ctrl-btn:hover {
+  background: #f0f0f0;
+}
+
+.map-ctrl-btn:active {
+  background: #e0e0e0;
+}
+
+.map-ctrl-btn.active {
+  background: #e8f4ff;
+  color: #2f6fd0;
+}
+
+.map-ctrl-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
+}
+
+.map-ctrl-geolocate {
+  position: absolute;
+  right: 12px;
+  bottom: 24px;
+  z-index: 10;
+}
