@@ -20,7 +20,7 @@
 
 import { blobSize, deleteBlob } from './blobstore';
 import { setKV } from '../data/idb';
-import { PMTILES_KEY } from './pmtiles-source';
+import { PMTILES_KEY } from './pmtiles-key';
 import { clearPack } from './thumbs';
 import { t } from '../i18n';
 

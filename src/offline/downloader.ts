@@ -15,7 +15,7 @@ import { AppError } from '../core/errors';
 import { putBlob, getBlob, blobSize } from './blobstore';
 import { setKV, getKV } from '../data/idb';
 import { setPack, type ThumbIndex } from './thumbs';
-import { PMTILES_KEY } from './pmtiles-source';
+import { PMTILES_KEY } from './pmtiles-key';
 import { t, type I18nKey } from '../i18n';
 
 /** Progress callback for a single package download: a plain 0..1 fraction. */

@@ -22,9 +22,14 @@ import { PMTiles } from 'pmtiles';
 import type { Source, RangeResponse } from 'pmtiles';
 import { registerPmtiles, getProtocol } from '../map/map';
 import { getBlob } from './blobstore';
+import { PMTILES_KEY } from './pmtiles-key';
 
-/** Default key under which the map archive is stored in IndexedDB / the protocol. */
-export const PMTILES_KEY = 'minsk';
+/**
+ * Default key under which the map archive is stored in IndexedDB / the protocol.
+ * Re-exported from the dependency-free pmtiles-key module so importers that only
+ * need the constant don't pull this (MapLibre-touching) module into their chunk.
+ */
+export { PMTILES_KEY };
 
 /**
  * A pmtiles Source backed by a Blob in IndexedDB. Reads are lazy byte ranges:

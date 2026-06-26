@@ -1,13 +1,11 @@
 import './styles.css';
+import type maplibregl from 'maplibre-gl';
 import type { Location, FilterState } from './core/types';
 import { Store } from './core/store';
 import { loadLocations } from './data/repository';
 import { applyFilters, defaultFilter } from './data/filter';
-import { addMarkers, updateMarkers } from './map/markers';
-import { setMapLanguage } from './map/map';
 import { buildStyle } from './map/style';
-import { getUserPosition } from './map/controls';
-import { mountShell } from './ui/shell';
+import { mountScaffold, type Scaffold } from './ui/scaffold';
 import { renderList, type UserPos } from './ui/list';
 import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
@@ -25,7 +23,7 @@ import {
   pendingPackageBytes,
 } from './offline/downloader';
 import { blobSize } from './offline/blobstore';
-import { PMTILES_KEY, useStoredPmtilesIfPresent, resolvePmtilesUrl } from './offline/pmtiles-source';
+import { PMTILES_KEY } from './offline/pmtiles-key';
 import { toast, progressOverlay } from './ui/toast';
 import { initInstallHint } from './ui/install-hint';
 import { addBanner } from './ui/banner-stack';
@@ -52,8 +50,8 @@ async function bootstrap(): Promise<void> {
   }
 
   // If the thumbnail pack is already in IndexedDB, hydrate it now so list/card
-  // thumbnails resolve from the offline bundle. Loads in parallel with shell mount
-  // and data fetch; the initial render awaits it (see below). No-op when no pack.
+  // thumbnails resolve from the offline bundle. Loads in parallel with the data
+  // fetch; the initial render awaits it (see below). No-op when no pack.
   const thumbsReady = loadThumbsPackFromIDB().catch(() => {});
 
   const store = new Store<AppState>({
@@ -68,21 +66,89 @@ async function bootstrap(): Promise<void> {
   });
 
   // Resolve the stored preference to the theme actually applied. The class on
-  // <html> is also set inside mountShell; we pass the effective value through.
+  // <html> is also set inside mountScaffold; we pass the effective value through.
   const eff = (): 'light' | 'dark' => effectiveTheme(store.get().theme);
 
-  // ── Shell + map ──
-  const shell = await mountShell(root, {
-    lang: store.get().mapLang,
-    theme: eff(),
-    // Show a visible toast when geolocation is denied/fails — on the first press
-    // and every repeat (the message already carries the GEO-01 code).
-    onGeoError: (message) => toast(message, { type: 'error' }),
+  // ── DOM chrome (synchronous, MapLibre-free) ──
+  // mountScaffold builds the sheet/toolbar/settings + an empty #map container with
+  // NO MapLibre import, so the nearby list can paint before the map engine (the
+  // bulk of the JS) is parsed. The map is attached later via a lazy import.
+  const scaffold: Scaffold = mountScaffold(root, { theme: eff() });
+  const { sheet, toolbar, settingsCtrl, mapEl } = scaffold;
+
+  // ── Map handles (populated once the lazy map chunk attaches) ──
+  let map: maplibregl.Map | null = null;
+  // The bare pmtiles source string for style rebuilds (theme/lang swaps); set when
+  // the map attaches and updated when the stored blob is added/removed.
+  let pmtilesUrl = '';
+  let getUserPos: () => UserPos | null = () => null;
+  // Re-point the style at the stored map blob; assigned once the map attaches.
+  let restoreStoredMap: () => Promise<void> = async () => {};
+  // Work queued by deep links / card opens that fire before the map is ready.
+  const onMapReady: Array<(m: maplibregl.Map) => void> = [];
+  const whenMapReady = (fn: (m: maplibregl.Map) => void): void => {
+    if (map) fn(map);
+    else onMapReady.push(fn);
+  };
+
+  // ── Helpers ──
+  const userPos = (): UserPos | null => getUserPos();
+
+  const onSelect = (id: number): void => store.set({ selectedId: id });
+
+  // Fly the map to a location; queue until the map chunk + style are ready.
+  const flyToLocation = (loc: Location): void => {
+    whenMapReady((m) => {
+      const go = (): void => {
+        m.flyTo({ center: [loc.longitude, loc.latitude], zoom: Math.max(m.getZoom(), 15) });
+      };
+      if (m.isStyleLoaded()) go();
+      else m.once('load', go);
+    });
+  };
+
+  // Prompt for geolocation when a route needs a user position: trigger the map's
+  // geolocate control (which requests the browser permission) and nudge the user.
+  const promptForGeo = (): void => {
+    const geoBtn = map
+      ?.getContainer()
+      .querySelector<HTMLButtonElement>('.map-ctrl-geolocate');
+    geoBtn?.click();
+    showToast(t('route.needGeo'));
+  };
+
+  // ── Search box (above the list) ──
+  // Mounted as a sibling before listView (which already exists in the scaffold's
+  // sheet) so renderList()'s replaceChildren() never wipes it. Hidden while a card
+  // is open.
+  const search = createSearch({
+    value: store.get().filter.query,
+    onQuery: (q) => {
+      if (q === store.get().filter.query) return;
+      store.set({ filter: { ...store.get().filter, query: q } });
+    },
   });
-  const { map, sheet } = shell;
+  sheet.listView.before(search.el);
+
+  const drawList = (): void => {
+    renderList(sheet.listView, store.get().filtered, { userPos: userPos(), onSelect });
+  };
+
+  const drawCard = (id: number): void => {
+    const loc = store.get().locations.find((l) => l.id === id);
+    if (!loc) return;
+    renderCard(sheet.cardView, loc, {
+      onBack: () => store.set({ selectedId: null }),
+      onRoute: (l) =>
+        whenMapReady((m) =>
+          startRoute(m, l, { getUserPos: userPos, onNeedGeo: promptForGeo }),
+        ),
+      onShare: (l) => void shareLocation(l),
+    });
+  };
 
   // ── Toolbar: filters button + active-conditions badge ──
-  const filtersBtn = shell.toolbar.querySelector<HTMLButtonElement>('[data-act="filters"]');
+  const filtersBtn = toolbar.querySelector<HTMLButtonElement>('[data-act="filters"]');
   const updateFilterBadge = (): void => {
     if (!filtersBtn) return;
     const n = activeFilterCount(store.get().filter);
@@ -105,60 +171,6 @@ async function bootstrap(): Promise<void> {
       { locations: store.get().locations },
     );
   });
-
-  // ── Helpers ──
-  const userPos = (): UserPos | null => {
-    const p = getUserPosition();
-    return p ? { lat: p.lat, lng: p.lng } : null;
-  };
-
-  const onSelect = (id: number): void => store.set({ selectedId: id });
-
-  // Fly the map to a location; queue until the style is ready if needed.
-  const flyToLocation = (loc: Location): void => {
-    const go = (): void => {
-      map.flyTo({ center: [loc.longitude, loc.latitude], zoom: Math.max(map.getZoom(), 15) });
-    };
-    if (map.isStyleLoaded()) go();
-    else map.once('load', go);
-  };
-
-  // ── Search box (above the list) ──
-  // Mounted as a sibling before listView so renderList()'s replaceChildren()
-  // never wipes it. Hidden while a card is open.
-  const search = createSearch({
-    value: store.get().filter.query,
-    onQuery: (q) => {
-      if (q === store.get().filter.query) return;
-      store.set({ filter: { ...store.get().filter, query: q } });
-    },
-  });
-  sheet.listView.before(search.el);
-
-  const drawList = (): void => {
-    renderList(sheet.listView, store.get().filtered, { userPos: userPos(), onSelect });
-  };
-
-  // Prompt for geolocation when a route needs a user position: trigger the map's
-  // geolocate control (which requests the browser permission) and nudge the user.
-  const promptForGeo = (): void => {
-    const geoBtn = map
-      .getContainer()
-      .querySelector<HTMLButtonElement>('.map-ctrl-geolocate');
-    geoBtn?.click();
-    showToast(t('route.needGeo'));
-  };
-
-  const drawCard = (id: number): void => {
-    const loc = store.get().locations.find((l) => l.id === id);
-    if (!loc) return;
-    renderCard(sheet.cardView, loc, {
-      onBack: () => store.set({ selectedId: null }),
-      onRoute: (l) =>
-        startRoute(map, l, { getUserPos: userPos, onNeedGeo: promptForGeo }),
-      onShare: (l) => void shareLocation(l),
-    });
-  };
 
   // Re-render the persistent chrome after a UI-language switch: list, open card,
   // toolbar filters label (preserving its badge), and the search box strings.
@@ -187,45 +199,23 @@ async function bootstrap(): Promise<void> {
   // Markers are only (re)drawn once the map style is ready; addSource/addLayer
   // throw otherwise. We track readiness so filter changes still update markers.
   let mapReady = false;
-  const refreshMarkers = (): void => {
-    if (!mapReady) return;
-    updateMarkers(map, store.get().filtered, onSelect);
-  };
+  // Assigned when the map attaches; no-ops until then so filter/selection changes
+  // before the map loads simply skip marker updates.
+  let refreshMarkers: () => void = () => {};
+  let reAddMarkers: () => void = () => {};
 
-  // Re-add the points source/layers after a style swap. If the source somehow
-  // survived (it normally won't), updateMarkers refreshes it instead of throwing.
-  const reAddMarkers = (): void => {
-    try {
-      if (map.getSource('points')) updateMarkers(map, store.get().filtered, onSelect);
-      else addMarkers(map, store.get().filtered, onSelect);
-    } catch (e) {
-      console.warn('[markers] re-add failed', e);
-    }
-  };
-
-  // Apply the *effective* theme to both the UI (class on <html>) and the map.
-  // Reused by the settings segment and the live system-preference subscription.
+  // Apply the *effective* theme to the UI (class on <html>) and, once it exists,
+  // the map. Reused by the settings segment and the live system-preference watch.
   const applyEffectiveTheme = (): void => {
     const dark = eff() === 'dark';
     // Theme class on <html> so the --bg token reaches <body> (iOS overscroll).
     document.documentElement.classList.toggle('theme-dark', dark);
+    if (!map) return;
     // setStyle() drops our custom point source/layers. Rebuild the style, then
     // re-add markers once the new style is live (one-shot styledata listener).
     // If the map was never ready, initMarkers()'s 'load' handler covers it.
     if (mapReady) map.once('styledata', reAddMarkers);
-    map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: shell.pmtilesUrl }));
-  };
-
-  // Re-point the map at the stored ('minsk') source and rebuild the style after
-  // the map blob is downloaded (settings or boot-offer). setStyle drops our
-  // custom point source/layers, so re-add markers once the new style is live
-  // (mirrors the theme-swap path). Also pins shell.pmtilesUrl to the stored
-  // source so later style rebuilds (theme swaps) keep serving from IndexedDB.
-  const restoreStoredMap = async (): Promise<void> => {
-    const src = (await useStoredPmtilesIfPresent(PMTILES_KEY)) ?? shell.pmtilesUrl;
-    shell.pmtilesUrl = src;
-    if (mapReady) map.once('styledata', reAddMarkers);
-    map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
+    map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl }));
   };
 
   // When following the OS ('system'), re-apply live as the OS scheme flips.
@@ -234,7 +224,7 @@ async function bootstrap(): Promise<void> {
   });
 
   // ── Settings button (top-right control, separate from the filters toolbar) ──
-  const settingsBtn = shell.settingsCtrl.querySelector<HTMLButtonElement>('[data-act="settings"]');
+  const settingsBtn = settingsCtrl.querySelector<HTMLButtonElement>('[data-act="settings"]');
   const buildSettingsCtx = (): SettingsCtx => {
     const s = store.get();
     return {
@@ -252,7 +242,7 @@ async function bootstrap(): Promise<void> {
       },
       setMapLang: (l) => {
         store.set({ mapLang: l });
-        setMapLanguage(map, l);
+        whenMapReady((m) => void setMapLangLazy(m, l));
       },
       setTheme: (pref) => {
         store.set({ theme: pref });
@@ -279,8 +269,10 @@ async function bootstrap(): Promise<void> {
         // now that no blob is present. Offline, tiles simply won't load until the
         // connection returns; the rest of the app keeps working. (Map only — the
         // thumbnail pack is independent; see onThumbsChanged.)
+        if (!map) return;
+        const { resolvePmtilesUrl } = await import('./offline/pmtiles-source');
         const src = await resolvePmtilesUrl(PMTILES_KEY);
-        shell.pmtilesUrl = src;
+        pmtilesUrl = src;
         if (mapReady) map.once('styledata', reAddMarkers);
         map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
       },
@@ -332,7 +324,7 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // ── Load data ──
+  // ── Load data + first render (BEFORE the map engine parses) ──
   try {
     const locations = await loadLocations();
     const filtered = applyFilters(locations, store.get().filter);
@@ -347,12 +339,13 @@ async function bootstrap(): Promise<void> {
   // offline, where the online fallback can't load. Cheap no-op when no pack exists.
   await thumbsReady;
 
-  // Initial render (list shows immediately even before map paints).
+  // Initial render — the list shows now, with the map engine not yet loaded.
   drawList();
 
   // ── Deep links (#id=NN) ──
-  // Open the referenced location's card and fly to it. Reused on hashchange so
-  // pasting/navigating to a share link selects the place live.
+  // Open the referenced location's card and fly to it (flyTo is queued until the
+  // map is ready). Reused on hashchange so pasting/navigating to a share link
+  // selects the place live.
   const selectFromHash = (): void => {
     const m = /#id=(\d+)/.exec(location.hash);
     if (!m) return;
@@ -365,32 +358,111 @@ async function bootstrap(): Promise<void> {
   selectFromHash();
   window.addEventListener('hashchange', selectFromHash);
 
-  // Add markers once the style finishes loading; if it never does (no tiles in
-  // dev), the list/card still work.
-  const initMarkers = (): void => {
-    mapReady = true;
-    try {
-      addMarkers(map, store.get().filtered, onSelect);
-    } catch (e) {
-      console.warn('[markers] could not add to map', e);
-    }
-  };
-  if (map.isStyleLoaded()) initMarkers();
-  else map.once('load', initMarkers);
-
-  // ── Install hint (iOS banner / beforeinstallprompt) + persistent storage ──
+  // ── Install hint + offline offer (independent of the map; shown promptly) ──
+  // These banners don't need the map, so trigger them on the same timeline as
+  // before — NOT gated behind the lazy map chunk — so they appear (and can be
+  // dismissed) right after the list, before the engine finishes loading.
   initInstallHint();
-
-  // ── Offer the offline package once, if not yet downloaded and online ──
   void maybeOfferOfflinePackage(async () => {
     // Map blob is now stored — re-point the map at the stored ('minsk') source so
     // it works offline (previously the offer only refreshed thumbnails). Then
     // redraw the list (and any open card) so thumbnails upgrade from the online
-    // fallback to the offline bundle's object URLs.
+    // fallback to the offline bundle's object URLs. restoreStoredMap is assigned
+    // by attachMapStack(); it has long since run by the time a download completes.
     await restoreStoredMap();
     drawList();
     if (store.get().selectedId != null) drawCard(store.get().selectedId!);
   });
+
+  // ── Attach the map (lazy chunk) ──
+  // Everything that pulls in MapLibre/pmtiles is imported here, after the first
+  // paint, so the engine parses off the critical path. The list/card already work;
+  // markers, tiles and map-language follow once this resolves.
+  let setMapLangLazy: (m: maplibregl.Map, l: 'ru' | 'en') => void = () => {};
+  await attachMapStack();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Lazy map attach + wiring. Kept inside bootstrap() to close over store/map
+  // helpers. The dynamic imports here form the MapLibre chunk boundary.
+  // ─────────────────────────────────────────────────────────────────────────
+  async function attachMapStack(): Promise<void> {
+    const [
+      { attachMap },
+      { addMarkers, updateMarkers },
+      { setMapLanguage },
+      { getUserPosition },
+      { useStoredPmtilesIfPresent },
+    ] = await Promise.all([
+      import('./ui/shell'),
+      import('./map/markers'),
+      import('./map/map'),
+      import('./map/controls'),
+      import('./offline/pmtiles-source'),
+    ]);
+
+    const handle = await attachMap(mapEl, {
+      lang: store.get().mapLang,
+      theme: eff(),
+      // Show a visible toast when geolocation is denied/fails — on the first press
+      // and every repeat (the message already carries the GEO-01 code).
+      onGeoError: (message) => toast(message, { type: 'error' }),
+    });
+    map = handle.map;
+    pmtilesUrl = handle.pmtilesUrl;
+    setMapLangLazy = setMapLanguage;
+    getUserPos = () => {
+      const p = getUserPosition();
+      return p ? { lat: p.lat, lng: p.lng } : null;
+    };
+
+    refreshMarkers = (): void => {
+      if (!mapReady || !map) return;
+      updateMarkers(map, store.get().filtered, onSelect);
+    };
+    // Re-add the points source/layers after a style swap. If the source somehow
+    // survived (it normally won't), updateMarkers refreshes it instead of throwing.
+    reAddMarkers = (): void => {
+      if (!map) return;
+      try {
+        if (map.getSource('points')) updateMarkers(map, store.get().filtered, onSelect);
+        else addMarkers(map, store.get().filtered, onSelect);
+      } catch (e) {
+        console.warn('[markers] re-add failed', e);
+      }
+    };
+
+    // Re-point the map at the stored ('minsk') source and rebuild the style after
+    // the map blob is downloaded (settings or boot-offer). setStyle drops our
+    // custom point source/layers, so re-add markers once the new style is live.
+    // Also pins pmtilesUrl to the stored source so later style rebuilds (theme
+    // swaps) keep serving from IndexedDB.
+    restoreStoredMap = async (): Promise<void> => {
+      if (!map) return;
+      const src = (await useStoredPmtilesIfPresent(PMTILES_KEY)) ?? pmtilesUrl;
+      pmtilesUrl = src;
+      if (mapReady) map.once('styledata', reAddMarkers);
+      map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
+    };
+
+    // Add markers once the style finishes loading; if it never does (no tiles in
+    // dev), the list/card still work.
+    const initMarkers = (): void => {
+      mapReady = true;
+      if (!map) return;
+      try {
+        addMarkers(map, store.get().filtered, onSelect);
+      } catch (e) {
+        console.warn('[markers] could not add to map', e);
+      }
+    };
+    if (map.isStyleLoaded()) initMarkers();
+    else map.once('load', initMarkers);
+
+    // Drain any work queued before the map was ready (deep-link flyTo, card route).
+    const m = map;
+    const queued = onMapReady.splice(0);
+    for (const fn of queued) fn(m);
+  }
 }
 
 /**

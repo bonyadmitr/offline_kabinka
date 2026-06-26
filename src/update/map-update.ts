@@ -16,7 +16,7 @@ import { AppError } from '../core/errors';
 import { getKV, setKV } from '../data/idb';
 import { downloadToBlob } from '../offline/downloader';
 import { putBlob, blobSize } from '../offline/blobstore';
-import { PMTILES_KEY } from '../offline/pmtiles-source';
+import { PMTILES_KEY } from '../offline/pmtiles-key';
 
 /** Vite base URL (e.g. "/offline_kabinka/"); "/" outside a Vite build. */
 const BASE_URL =
