@@ -941,6 +941,11 @@ img {
   height: 100%;
   object-fit: cover;
   display: block;
+  /* No native image ghost-drag on mouse (#16). */
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
 }
 
 .gallery-slide.img-broken img {
@@ -969,6 +974,53 @@ img {
 
 .gallery-dot.active {
   background: #ffffff;
+}
+
+/* Carousel arrows — visible on hover-capable (desktop) pointers; hidden on touch
+   (swipe/scroll instead, see @media (hover: none) below). */
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.gallery-arrow:active {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.gallery-arrow:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.gallery-arrow-prev {
+  left: 8px;
+}
+
+.gallery-arrow-next {
+  right: 8px;
+}
+
+/* Touch devices: rely on swipe / scroll-snap, hide the arrows. */
+@media (hover: none) {
+  .gallery-arrow {
+    display: none;
+  }
 }
 
 .gallery-empty {
@@ -1021,6 +1073,7 @@ body.viewer-open {
   object-fit: contain;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-user-drag: none; /* no native ghost-drag on mouse (#16) */
   transition: transform 0.05s linear;
   touch-action: none;
 }

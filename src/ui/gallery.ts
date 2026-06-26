@@ -49,6 +49,7 @@ export function renderGallery(container: HTMLElement, location: Location): void 
     img.loading = 'lazy';
     img.decoding = 'async';
     img.alt = '';
+    img.draggable = false; // no native image ghost-drag (#16)
     img.src = thumbUrl(photo.thumb);
     img.addEventListener('error', () => slide.classList.add('img-broken'));
     slide.appendChild(img);
@@ -61,6 +62,8 @@ export function renderGallery(container: HTMLElement, location: Location): void 
     dots.appendChild(dot);
   });
 
+  container.appendChild(track);
+
   // Update active dot as the user scrolls the carousel.
   if (photos.length > 1) {
     track.addEventListener('scroll', () => {
@@ -70,10 +73,27 @@ export function renderGallery(container: HTMLElement, location: Location): void 
         children[i].classList.toggle('active', i === idx);
       }
     }, { passive: true });
-  }
 
-  container.appendChild(track);
-  if (photos.length > 1) container.appendChild(dots);
+    // Visible ‹ › arrows (desktop; hidden on touch via CSS @media (hover:none)).
+    // Scroll one slide at a time; native trackpad/wheel scroll-snap still works.
+    const arrow = (dir: -1 | 1, cls: string, label: string, glyph: string): HTMLButtonElement => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `gallery-arrow ${cls}`;
+      btn.setAttribute('aria-label', label);
+      btn.innerHTML = `<span aria-hidden="true">${glyph}</span>`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // don't open the fullscreen viewer
+        track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' });
+      });
+      return btn;
+    };
+    container.append(
+      arrow(-1, 'gallery-arrow-prev', t('viewer.prev'), '‹'),
+      arrow(1, 'gallery-arrow-next', t('viewer.next'), '›'),
+    );
+    container.appendChild(dots);
+  }
 }
 
 // ─── Fullscreen viewer ─────────────────────────────────────────────────────────
@@ -104,6 +124,9 @@ export function openViewer(location: Location, start: number): void {
   img.className = 'viewer-img';
   img.alt = '';
   img.draggable = false;
+  // Belt-and-braces: some engines still start a native drag on mousedown even with
+  // draggable=false. Cancel it so the pointer-gesture handler owns mouse drags (#16).
+  img.addEventListener('dragstart', (e) => e.preventDefault());
 
   const fallback = document.createElement('div');
   fallback.className = 'viewer-fallback';
