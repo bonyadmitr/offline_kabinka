@@ -43,7 +43,9 @@ export function createMap(
       [27.30, 53.78],
       [27.78, 54.02],
     ],
-    attributionControl: { compact: true },
+    // Show the OpenMapTiles/OSM credit inline (not hidden behind the ⓘ toggle).
+    // The attribution text itself is declared on the source in style.ts.
+    attributionControl: { compact: false },
   });
 }
 

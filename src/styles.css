@@ -1138,7 +1138,7 @@ body.viewer-open {
 .map-ctrl-zoom {
   position: absolute;
   right: 12px;
-  bottom: 80px;
+  bottom: 104px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1148,8 +1148,44 @@ body.viewer-open {
 .map-ctrl-geolocate {
   position: absolute;
   right: 12px;
-  bottom: 24px;
+  bottom: 48px;
   z-index: 10;
+}
+
+/* ============================================================================
+   Map attribution (OpenMapTiles / OSM) — visible inline, not behind the ⓘ
+   ============================================================================ */
+/* compact:false renders the full credit; keep it small, translucent and pinned to
+   the bottom-right corner under the zoom/geolocate stack. The credit text itself is
+   declared on the vector source in style.ts. */
+.maplibregl-ctrl-attrib.maplibregl-ctrl {
+  margin: 0;
+  padding: 1px 6px;
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-radius: 6px 0 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.maplibregl-ctrl-attrib.maplibregl-ctrl a {
+  color: var(--text-2);
+  text-decoration: underline;
+}
+
+/* Hide the ⓘ expand toggle — we always show the text (compact:false). */
+.maplibregl-ctrl-attrib-button {
+  display: none !important;
+}
+
+/* Narrow screens: smaller still, but the text stays present. */
+@media (max-width: 767px) {
+  .maplibregl-ctrl-attrib.maplibregl-ctrl {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
 }
 
 /* ============================================================================
