@@ -17,6 +17,7 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     setNavigator: [],
     onDataUpdated: [],
     onMapUpdated: [],
+    onPackageRemoved: [],
   };
   const ctx: SettingsCtx = {
     uiLang: 'ru',
@@ -35,18 +36,24 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     onMapUpdated: () => {
       calls.onMapUpdated.push(true);
     },
+    onPackageRemoved: () => {
+      calls.onPackageRemoved.push(true);
+    },
     ...over,
   };
   return { ctx, calls };
 }
 
-test('renders all sections incl. device id + version', () => {
+test('renders all sections incl. theme segment + offline package + version', () => {
   const { ctx } = mockCtx();
   openSettings(ctx);
   const body = document.querySelector('.modal-body')!;
   expect(body.querySelector('[data-seg="uiLang"]')).toBeTruthy();
   expect(body.querySelector('[data-seg="mapLang"]')).toBeTruthy();
-  expect(body.querySelector('[data-toggle="theme"]')).toBeTruthy();
+  // Theme is now a three-way segment (System / Light / Dark), not a toggle.
+  expect(body.querySelector('[data-seg="theme"]')).toBeTruthy();
+  expect(body.querySelectorAll('[data-seg="theme"] .seg-btn').length).toBe(3);
+  expect(body.querySelector('[data-toggle="theme"]')).toBeFalsy();
   expect(body.querySelector('[data-seg="radius"]')).toBeTruthy();
   expect(body.querySelectorAll('[data-nav]').length).toBe(4);
   // WU8 activated the update actions; they render enabled (no disabled attr).
@@ -54,21 +61,24 @@ test('renders all sections incl. device id + version', () => {
   expect(body.querySelector('.set-action[data-act="refresh-map"]')).toBeTruthy();
   expect(body.querySelector('.set-action[data-act="refresh-data"][disabled]')).toBeFalsy();
   expect(body.querySelector('.set-action[data-act="refresh-map"][disabled]')).toBeFalsy();
-  // WU7b activated: storage usage readout, clear-cache, reinstall, install help.
+  // Storage usage readout + clear-photo-cache + install help.
   expect(body.querySelector('[data-usage]')).toBeTruthy();
   expect(body.querySelector('.set-action[data-act="clear-cache"]')).toBeTruthy();
-  expect(body.querySelector('.set-action[data-act="reinstall"]')).toBeTruthy();
+  // Reinstall is gone; an offline-package section renders in its place.
+  expect(body.querySelector('.set-action[data-act="reinstall"]')).toBeFalsy();
+  expect(body.querySelector('[data-package]')).toBeTruthy();
   expect(body.querySelector('[data-install]')).toBeTruthy();
-  expect(body.querySelector('.set-device-id')?.textContent).toBeTruthy();
+  // Device ID is no longer displayed.
+  expect(body.querySelector('.set-device-id')).toBeFalsy();
 });
 
-test('theme toggle calls setTheme(dark)', () => {
+test('theme segment calls setTheme with the chosen preference', () => {
   const { ctx, calls } = mockCtx();
   openSettings(ctx);
-  const toggle = document.querySelector<HTMLInputElement>('[data-toggle="theme"]')!;
-  toggle.checked = true;
-  toggle.dispatchEvent(new Event('change'));
-  expect(calls.setTheme).toEqual(['dark']);
+  const seg = document.querySelector('[data-seg="theme"]')!;
+  seg.querySelector<HTMLButtonElement>('[data-val="dark"]')!.click();
+  seg.querySelector<HTMLButtonElement>('[data-val="system"]')!.click();
+  expect(calls.setTheme).toEqual(['dark', 'system']);
 });
 
 test('map-lang segment calls setMapLang(en)', () => {
@@ -99,7 +109,9 @@ test('navigator radio calls setNavigator', () => {
 test('current selections are reflected as pressed/checked', () => {
   const { ctx } = mockCtx({ theme: 'dark', mapLang: 'en', radius: 20, navigator: 'apple' });
   openSettings(ctx);
-  expect(document.querySelector<HTMLInputElement>('[data-toggle="theme"]')!.checked).toBe(true);
+  expect(
+    document.querySelector('[data-seg="theme"] [data-val="dark"]')!.getAttribute('aria-pressed'),
+  ).toBe('true');
   expect(
     document.querySelector('[data-seg="mapLang"] [data-val="en"]')!.getAttribute('aria-pressed'),
   ).toBe('true');

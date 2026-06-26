@@ -1,23 +1,26 @@
 import { openModal } from './modal';
-import { getDeviceId } from '../core/device';
 import { esc } from './format';
 import { t } from '../i18n';
 import {
   estimateUsage,
   transientBytes,
   clearTransient,
-  reinstallPackage,
+  deletePackage,
   formatBytes,
   type UsageBreakdown,
 } from '../offline/storage';
+import { blobSize } from '../offline/blobstore';
+import { ensureOfflinePackage, packageBytes } from '../offline/downloader';
+import { PMTILES_KEY } from '../offline/pmtiles-source';
 import { renderInstallHelp } from './install-hint';
 import { progressOverlay, toast } from './toast';
 import { toUserMessage } from '../core/errors';
 import { updateData } from '../update/data-update';
 import { checkMapUpdate, updateMap } from '../update/map-update';
+import type { ThemePref } from '../core/theme';
 
 export type Lang = 'ru' | 'en';
-export type Theme = 'light' | 'dark';
+export type Theme = ThemePref;
 export type Radius = 1 | 2 | 5 | 20;
 export type NavigatorId = 'yandex_maps' | 'yandex_navi' | 'google' | 'apple';
 
@@ -39,6 +42,8 @@ export interface SettingsCtx {
   onDataUpdated(): void | Promise<void>;
   /** Re-register the stored map source and rebuild the style (no reload). */
   onMapUpdated(): void | Promise<void>;
+  /** Re-point the map style at the network source (after deleting the package). */
+  onPackageRemoved(): void | Promise<void>;
 }
 
 // Built per-open so labels reflect the active language.
@@ -72,13 +77,12 @@ export function openSettings(ctx: SettingsCtx): void {
     </div>
 
     <div class="set-group">
-      <label class="filter-toggle">
-        <span class="filter-toggle-label"><span aria-hidden="true">🌙</span> ${esc(t('settings.darkTheme'))}</span>
-        <span class="switch">
-          <input type="checkbox" data-toggle="theme" ${ctx.theme === 'dark' ? 'checked' : ''} />
-          <span class="switch-track" aria-hidden="true"></span>
-        </span>
-      </label>
+      <div class="set-label">${esc(t('settings.theme'))}</div>
+      ${segment('theme', [
+        { value: 'system', label: t('settings.themeSystem') },
+        { value: 'light', label: t('settings.themeLight') },
+        { value: 'dark', label: t('settings.themeDark') },
+      ], ctx.theme)}
     </div>
 
     <div class="set-group">
@@ -117,12 +121,14 @@ export function openSettings(ctx: SettingsCtx): void {
       </div>
       <div class="set-actions">
         <button type="button" class="set-action" data-act="clear-cache">
-          <span data-clear-label>${esc(t('settings.clearCache'))}</span>
-        </button>
-        <button type="button" class="set-action" data-act="reinstall">
-          <span>${esc(t('settings.reinstall'))}</span>
+          <span data-clear-label>${esc(t('settings.clearPhotos'))}</span>
         </button>
       </div>
+    </div>
+
+    <div class="set-group">
+      <div class="set-label">${esc(t('settings.offlineTitle'))}</div>
+      <div class="set-package" data-package></div>
     </div>
 
     <div class="set-group">
@@ -144,10 +150,6 @@ export function openSettings(ctx: SettingsCtx): void {
 
     <div class="set-group set-about">
       <div class="set-meta">
-        <span class="set-meta-key">${esc(t('settings.deviceId'))}</span>
-        <code class="set-device-id">${esc(getDeviceId())}</code>
-      </div>
-      <div class="set-meta">
         <span class="set-meta-key">${esc(t('settings.version'))}</span>
         <span>${esc(APP_VERSION)}</span>
       </div>
@@ -160,11 +162,7 @@ export function openSettings(ctx: SettingsCtx): void {
   wireSegment(body, 'uiLang', (v) => ctx.setUiLang(v as Lang));
   wireSegment(body, 'mapLang', (v) => ctx.setMapLang(v as Lang));
   wireSegment(body, 'radius', (v) => ctx.setRadius(Number(v) as Radius));
-
-  // ── Theme toggle ──
-  body.querySelector<HTMLInputElement>('[data-toggle="theme"]')?.addEventListener('change', (e) => {
-    ctx.setTheme((e.target as HTMLInputElement).checked ? 'dark' : 'light');
-  });
+  wireSegment(body, 'theme', (v) => ctx.setTheme(v as Theme));
 
   // ── Navigator radios ──
   body.querySelectorAll<HTMLInputElement>('[data-nav]').forEach((el) => {
@@ -177,8 +175,11 @@ export function openSettings(ctx: SettingsCtx): void {
   const installHost = body.querySelector<HTMLElement>('[data-install]');
   if (installHost) renderInstallHelp(installHost);
 
-  // ── Storage: usage readout, clear cache, reinstall ──
+  // ── Storage: usage readout + clear photo cache ──
   wireStorage(body);
+
+  // ── Offline package: download / delete ──
+  wirePackage(body, ctx);
 
   // ── Updates: refresh data, refresh map ──
   wireUpdates(body, ctx);
@@ -290,56 +291,116 @@ function renderUsage(
   }
 }
 
-/** Wire the usage readout + clear-cache + reinstall actions. */
-function wireStorage(body: HTMLElement): void {
+/** Re-measure the usage breakdown + the clear-photo-cache button label. */
+function refreshUsage(body: HTMLElement): void {
+  void estimateUsage()
+    .then((u) => renderUsage(body, u))
+    .catch(() => {
+      const totalEl = body.querySelector<HTMLElement>('[data-usage-total]');
+      if (totalEl) totalEl.textContent = '—';
+    });
   const clearBtn = body.querySelector<HTMLButtonElement>('[data-act="clear-cache"]');
   const clearLabel = body.querySelector<HTMLElement>('[data-clear-label]');
-  const reinstallBtn = body.querySelector<HTMLButtonElement>('[data-act="reinstall"]');
+  void transientBytes().then((bytes) => {
+    if (!clearLabel) return;
+    clearLabel.textContent =
+      bytes > 0 ? t('settings.clearPhotosBtn', { x: formatBytes(bytes) }) : t('settings.clearPhotos');
+    if (clearBtn) clearBtn.disabled = bytes <= 0;
+  });
+}
 
-  const refresh = (): void => {
-    void estimateUsage()
-      .then((u) => renderUsage(body, u))
-      .catch(() => {
-        const totalEl = body.querySelector<HTMLElement>('[data-usage-total]');
-        if (totalEl) totalEl.textContent = '—';
-      });
-    void transientBytes().then((bytes) => {
-      if (!clearLabel) return;
-      clearLabel.textContent =
-        bytes > 0 ? t('settings.clearCacheBtn', { x: formatBytes(bytes) }) : t('settings.clearCache');
-      if (clearBtn) clearBtn.disabled = bytes <= 0;
-    });
-  };
-  refresh();
+/** Wire the usage readout + clear-photo-cache action (transient only). */
+function wireStorage(body: HTMLElement): void {
+  const clearBtn = body.querySelector<HTMLButtonElement>('[data-act="clear-cache"]');
+  refreshUsage(body);
 
   clearBtn?.addEventListener('click', () => {
     clearBtn.disabled = true;
     void clearTransient()
       .then((freed) => {
-        toast(freed > 0 ? t('settings.cleared', { x: formatBytes(freed) }) : t('settings.clearCacheEmpty'));
-        refresh();
+        toast(freed > 0 ? t('settings.cleared', { x: formatBytes(freed) }) : t('settings.clearPhotosEmpty'));
+        refreshUsage(body);
       })
       .catch((e) => {
         toast(toUserMessage(e), { type: 'error' });
-        refresh();
+        refreshUsage(body);
       });
   });
+}
 
-  reinstallBtn?.addEventListener('click', () => {
-    const overlay = progressOverlay(t('settings.reinstalling'));
+/**
+ * Render + wire the "Offline package" section: status (downloaded size / not
+ * downloaded) and a single action — Download when absent, Delete when present.
+ * Re-renders itself after each action so the button flips Download↔Delete.
+ */
+function wirePackage(body: HTMLElement, ctx: SettingsCtx): void {
+  const host = body.querySelector<HTMLElement>('[data-package]');
+  if (!host) return;
+
+  const render = async (): Promise<void> => {
+    const installed = (await blobSize(PMTILES_KEY)) > 0;
+    // Real package size from the server manifest (with offline fallback).
+    const mb = Math.round((await packageBytes()) / (1024 * 1024));
+
+    host.replaceChildren();
+    const status = document.createElement('div');
+    status.className = 'set-meta';
+    status.innerHTML = `
+      <span class="set-meta-key">${esc(t('settings.offlineStatus'))}</span>
+      <span>${esc(installed ? t('settings.offlineInstalled', { x: `${mb}` }) : t('settings.offlineNotInstalled'))}</span>`;
+
+    const actions = document.createElement('div');
+    actions.className = 'set-actions';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'set-action';
+
+    if (installed) {
+      btn.dataset.act = 'delete-package';
+      btn.innerHTML = `<span>${esc(t('settings.offlineDelete', { n: mb }))}</span>`;
+      btn.addEventListener('click', () => void onDelete());
+    } else {
+      btn.dataset.act = 'download-package';
+      btn.innerHTML = `<span>${esc(t('settings.offlineDownload', { n: mb }))}</span>`;
+      btn.addEventListener('click', () => onDownload());
+    }
+
+    actions.append(btn);
+    host.append(status, actions);
+  };
+
+  const onDownload = (): void => {
+    const overlay = progressOverlay(t('offline.downloading'));
     const start = (): void => {
-      reinstallPackage((p, label) => overlay.update(p, label))
-        .then(() => {
+      ensureOfflinePackage((p, label) => overlay.update(p, label))
+        .then(async () => {
           overlay.close();
-          toast(t('settings.reinstalled'));
-          refresh();
+          toast(t('offline.done'));
+          await ctx.onMapUpdated();
+          await render();
+          refreshUsage(body);
         })
         .catch((e) => {
           overlay.error(toUserMessage(e), { onRetry: start });
         });
     };
     start();
-  });
+  };
+
+  const onDelete = async (): Promise<void> => {
+    try {
+      await deletePackage();
+      await ctx.onPackageRemoved();
+      toast(t('settings.offlineDeleted'));
+    } catch (e) {
+      toast(toUserMessage(e), { type: 'error' });
+    }
+    await render();
+    refreshUsage(body);
+  };
+
+  void render();
 }
 
 function segment(

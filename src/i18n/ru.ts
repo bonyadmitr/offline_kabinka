@@ -126,7 +126,10 @@ export const ru = {
   'settings.title': 'Настройки',
   'settings.uiLanguage': 'Язык интерфейса',
   'settings.mapLanguage': 'Язык карты',
-  'settings.darkTheme': 'Тёмная тема',
+  'settings.theme': 'Тема',
+  'settings.themeSystem': 'Система',
+  'settings.themeLight': 'Светлая',
+  'settings.themeDark': 'Тёмная',
   'settings.listRadius': 'Радиус списка',
   'settings.radiusKm': (p) => `${p.km} км`,
   'settings.defaultNavigator': 'Навигатор по умолчанию',
@@ -139,9 +142,7 @@ export const ru = {
   'settings.refreshData': 'Обновить данные',
   'settings.refreshMap': 'Обновить карту',
   'settings.appSize': 'Размер приложения',
-  'settings.clearCache': 'Очистить кеш',
   'settings.install': 'Как установить приложение',
-  'settings.deviceId': 'Device ID',
   'settings.version': 'Версия',
 
   // ── Sheet ──
@@ -158,8 +159,8 @@ export const ru = {
   'offline.stageThumbs': 'Скачивание фотографий…',
   'offline.stageFinalize': 'Подготовка…',
   'offline.done': 'Офлайн-пакет загружен',
-  // n = approximate megabytes.
-  'offline.offer': (p) => `Скачать офлайн-пакет (~${p.n} МБ)?`,
+  // n = megabytes.
+  'offline.offer': (p) => `Скачать офлайн-пакет (${p.n} МБ)?`,
   'offline.offerDownload': 'Скачать',
   'offline.offerLater': 'Позже',
 
@@ -169,16 +170,24 @@ export const ru = {
   'settings.appSizeMap': 'Карта',
   'settings.appSizeThumbs': 'Фотографии (офлайн)',
   'settings.appSizeData': 'Данные',
-  'settings.appSizePhotos': 'Кеш фото',
+  'settings.appSizePhotos': 'Кеш фото (оценка)',
   'settings.appSizeShell': 'Оболочка',
   'settings.appSizeMeasuring': 'Подсчёт…',
   // x = human-readable size, e.g. "12 МБ".
-  'settings.clearCacheBtn': (p) => `Очистить кеш (${p.x})`,
-  'settings.clearCacheEmpty': 'Кеш фото пуст',
+  'settings.clearPhotos': 'Очистить кеш фото',
+  'settings.clearPhotosBtn': (p) => `Очистить кеш фото (${p.x})`,
+  'settings.clearPhotosEmpty': 'Кеш фото пуст',
   'settings.cleared': (p) => `Освобождено ${p.x}`,
-  'settings.reinstall': 'Переустановить офлайн-пакет',
-  'settings.reinstalling': 'Переустановка…',
-  'settings.reinstalled': 'Офлайн-пакет переустановлен',
+  // ── Offline package management ──
+  'settings.offlineTitle': 'Офлайн-пакет',
+  'settings.offlineStatus': 'Статус',
+  // x = size in MB.
+  'settings.offlineInstalled': (p) => `Скачан (${p.x} МБ)`,
+  'settings.offlineNotInstalled': 'Не скачан',
+  // n = size in MB.
+  'settings.offlineDownload': (p) => `Скачать офлайн-пакет (${p.n} МБ)`,
+  'settings.offlineDelete': (p) => `Удалить офлайн-пакет (${p.n} МБ)`,
+  'settings.offlineDeleted': 'Офлайн-пакет удалён. Карта работает при интернете.',
   'settings.installTitle': 'Как установить приложение',
   'settings.installIosSteps': 'Нажмите «Поделиться», затем «На экран „Домой“».',
   'settings.installBtn': 'Установить',

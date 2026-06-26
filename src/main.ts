@@ -17,11 +17,14 @@ import { shareLocation, showToast } from './ui/share';
 import { startRoute } from './routing';
 import { setLang, getLang, t } from './i18n';
 import {
+  loadTheme,
+  saveTheme,
   loadRadius,
   saveRadius,
   loadNavigator,
   saveNavigator,
 } from './core/settings';
+import { effectiveTheme, watchSystemTheme, type ThemePref } from './core/theme';
 import { toUserMessage } from './core/errors';
 import {
   loadThumbsPackFromIDB,
@@ -29,7 +32,7 @@ import {
   pendingPackageBytes,
 } from './offline/downloader';
 import { blobSize } from './offline/blobstore';
-import { PMTILES_KEY, useStoredPmtilesIfPresent } from './offline/pmtiles-source';
+import { PMTILES_KEY, useStoredPmtilesIfPresent, resolvePmtilesUrl } from './offline/pmtiles-source';
 import { toast, progressOverlay } from './ui/toast';
 import { initInstallHint } from './ui/install-hint';
 
@@ -40,7 +43,7 @@ interface AppState {
   filter: FilterState;
   uiLang: 'ru' | 'en';
   mapLang: 'ru' | 'en';
-  theme: 'light' | 'dark';
+  theme: ThemePref;
   radius: Radius;
   navigator: NavigatorId;
 }
@@ -67,13 +70,17 @@ async function bootstrap(): Promise<void> {
     filter: defaultFilter(),
     uiLang: getLang(), // persisted in localStorage by the i18n module
     mapLang: 'ru',
-    theme: 'light',
+    theme: loadTheme(), // 'system' | 'light' | 'dark', default 'system'
     radius: loadRadius(),
     navigator: loadNavigator(),
   });
 
+  // Resolve the stored preference to the theme actually applied. The class on
+  // <html> is also set inside mountShell; we pass the effective value through.
+  const eff = (): 'light' | 'dark' => effectiveTheme(store.get().theme);
+
   // ── Shell + map ──
-  const shell = await mountShell(root, { lang: store.get().mapLang, theme: store.get().theme });
+  const shell = await mountShell(root, { lang: store.get().mapLang, theme: eff() });
   const { map, sheet } = shell;
 
   // ── Toolbar: filters button + active-conditions badge ──
@@ -198,6 +205,24 @@ async function bootstrap(): Promise<void> {
     }
   };
 
+  // Apply the *effective* theme to both the UI (class on <html>) and the map.
+  // Reused by the settings segment and the live system-preference subscription.
+  const applyEffectiveTheme = (): void => {
+    const dark = eff() === 'dark';
+    // Theme class on <html> so the --bg token reaches <body> (iOS overscroll).
+    document.documentElement.classList.toggle('theme-dark', dark);
+    // setStyle() drops our custom point source/layers. Rebuild the style, then
+    // re-add markers once the new style is live (one-shot styledata listener).
+    // If the map was never ready, initMarkers()'s 'load' handler covers it.
+    if (mapReady) map.once('styledata', reAddMarkers);
+    map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: shell.pmtilesUrl }));
+  };
+
+  // When following the OS ('system'), re-apply live as the OS scheme flips.
+  watchSystemTheme(() => {
+    if (store.get().theme === 'system') applyEffectiveTheme();
+  });
+
   // ── Toolbar: settings button ──
   const settingsBtn = shell.toolbar.querySelector<HTMLButtonElement>('[data-act="settings"]');
   const buildSettingsCtx = (): SettingsCtx => {
@@ -220,15 +245,11 @@ async function bootstrap(): Promise<void> {
         store.set({ mapLang: l });
         setMapLanguage(map, l);
       },
-      setTheme: (t) => {
-        store.set({ theme: t });
-        // Theme class on <html> so the --bg token reaches <body> (iOS overscroll).
-        document.documentElement.classList.toggle('theme-dark', t === 'dark');
-        // setStyle() drops our custom point source/layers. Rebuild the style, then
-        // re-add markers once the new style is live (one-shot styledata listener).
-        // If the map was never ready, initMarkers()'s 'load' handler covers it.
-        if (mapReady) map.once('styledata', reAddMarkers);
-        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: t, pmtilesUrl: shell.pmtilesUrl }));
+      setTheme: (pref) => {
+        store.set({ theme: pref });
+        saveTheme(pref);
+        // Apply the resolved effective theme to <html> + the map style.
+        applyEffectiveTheme();
       },
       setRadius: (km) => {
         store.set({ radius: km });
@@ -253,7 +274,20 @@ async function bootstrap(): Promise<void> {
         // (mirrors the theme-swap path).
         const src = (await useStoredPmtilesIfPresent(PMTILES_KEY)) ?? shell.pmtilesUrl;
         if (mapReady) map.once('styledata', reAddMarkers);
-        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: store.get().theme, pmtilesUrl: src }));
+        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
+      },
+      onPackageRemoved: async () => {
+        // The stored map blob is gone — re-point the style at the network source
+        // (range requests when online). resolvePmtilesUrl returns the network URL
+        // now that no blob is present. Offline, tiles simply won't load until the
+        // connection returns; the rest of the app keeps working.
+        const src = await resolvePmtilesUrl(PMTILES_KEY);
+        shell.pmtilesUrl = src;
+        if (mapReady) map.once('styledata', reAddMarkers);
+        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: eff(), pmtilesUrl: src }));
+        // Thumbnails fell back to online URLs (pack cleared) — redraw to refresh.
+        drawList();
+        if (store.get().selectedId != null) drawCard(store.get().selectedId!);
       },
     };
   };
