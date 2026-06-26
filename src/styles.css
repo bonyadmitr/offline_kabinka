@@ -90,7 +90,9 @@ img {
   overflow: hidden;
 }
 
-.map-container {
+/* #map raises specificity above maplibre-gl's own `.maplibregl-map { position: relative }`,
+   which otherwise ties with .map-container and collapses the map to height:0. */
+#map.map-container {
   position: absolute;
   inset: 0;
   background: var(--bg);
