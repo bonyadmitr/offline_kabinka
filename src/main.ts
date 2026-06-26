@@ -13,6 +13,7 @@ import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
 import { openSettings, type SettingsCtx, type Radius, type NavigatorId } from './ui/settings';
 import { createSearch } from './ui/search';
+import { shareLocation } from './ui/share';
 import {
   loadRadius,
   saveRadius,
@@ -86,6 +87,15 @@ async function bootstrap(): Promise<void> {
 
   const onSelect = (id: number): void => store.set({ selectedId: id });
 
+  // Fly the map to a location; queue until the style is ready if needed.
+  const flyToLocation = (loc: Location): void => {
+    const go = (): void => {
+      map.flyTo({ center: [loc.longitude, loc.latitude], zoom: Math.max(map.getZoom(), 15) });
+    };
+    if (map.isStyleLoaded()) go();
+    else map.once('load', go);
+  };
+
   // ── Search box (above the list) ──
   // Mounted as a sibling before listView so renderList()'s replaceChildren()
   // never wipes it. Hidden while a card is open.
@@ -107,8 +117,8 @@ async function bootstrap(): Promise<void> {
     if (!loc) return;
     renderCard(sheet.cardView, loc, {
       onBack: () => store.set({ selectedId: null }),
-      onRoute: (l) => console.info('[route] WU5 will wire this', l.id), // WU5 hook
-      onShare: (l) => console.info('[share] WU5 will wire this', l.id), // WU5 hook
+      onRoute: (l) => console.info('[route] WU5 will wire this', l.id), // WU5b hook
+      onShare: (l) => void shareLocation(l),
     });
   };
 
@@ -221,6 +231,21 @@ async function bootstrap(): Promise<void> {
 
   // Initial render (list shows immediately even before map paints).
   drawList();
+
+  // ── Deep links (#id=NN) ──
+  // Open the referenced location's card and fly to it. Reused on hashchange so
+  // pasting/navigating to a share link selects the place live.
+  const selectFromHash = (): void => {
+    const m = /#id=(\d+)/.exec(location.hash);
+    if (!m) return;
+    const id = Number(m[1]);
+    const loc = store.get().locations.find((l) => l.id === id);
+    if (!loc) return;
+    if (store.get().selectedId !== id) store.set({ selectedId: id });
+    flyToLocation(loc);
+  };
+  selectFromHash();
+  window.addEventListener('hashchange', selectFromHash);
 
   // Add markers once the style finishes loading; if it never does (no tiles in
   // dev), the list/card still work.
