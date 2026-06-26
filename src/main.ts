@@ -8,6 +8,7 @@ import { getUserPosition } from './map/controls';
 import { mountShell } from './ui/shell';
 import { renderList, type UserPos } from './ui/list';
 import { renderCard } from './ui/card';
+import { openFilters, activeFilterCount } from './ui/filters';
 import { toUserMessage } from './core/errors';
 
 interface AppState {
@@ -37,6 +38,31 @@ async function bootstrap(): Promise<void> {
   // ── Shell + map ──
   const shell = mountShell(root, { lang: store.get().mapLang, theme: store.get().theme });
   const { map, sheet } = shell;
+
+  // ── Toolbar: filters button + active-conditions badge ──
+  const filtersBtn = shell.toolbar.querySelector<HTMLButtonElement>('[data-act="filters"]');
+  const updateFilterBadge = (): void => {
+    if (!filtersBtn) return;
+    const n = activeFilterCount(store.get().filter);
+    let badge = filtersBtn.querySelector<HTMLElement>('.toolbar-badge');
+    if (n > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'toolbar-badge';
+        filtersBtn.appendChild(badge);
+      }
+      badge.textContent = String(n);
+    } else {
+      badge?.remove();
+    }
+  };
+  filtersBtn?.addEventListener('click', () => {
+    openFilters(
+      store.get().filter,
+      (f) => store.set({ filter: f }),
+      { locations: store.get().locations },
+    );
+  });
 
   // ── Helpers ──
   const userPos = (): UserPos | null => {
@@ -73,9 +99,10 @@ async function bootstrap(): Promise<void> {
   let prevSelected = store.get().selectedId;
 
   store.subscribe((s) => {
-    // Filter changed → recompute filtered, redraw list + markers.
+    // Filter changed → recompute filtered, redraw list + markers, refresh badge.
     if (s.filter !== prevFilter) {
       prevFilter = s.filter;
+      updateFilterBadge();
       store.set({ filtered: applyFilters(s.locations, s.filter) });
       return; // the set() above re-enters the subscriber with fresh `filtered`
     }
