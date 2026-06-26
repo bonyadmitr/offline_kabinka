@@ -40,6 +40,12 @@ async function bootstrap(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) throw new Error('#app not found');
 
+  // Register the service worker in production only (no SW in dev). Dynamic import
+  // so the virtual:pwa-register module is never pulled into the dev bundle.
+  if (import.meta.env.PROD) {
+    void import('./offline/sw-register').then((m) => m.registerServiceWorker());
+  }
+
   const store = new Store<AppState>({
     locations: [],
     filtered: [],
