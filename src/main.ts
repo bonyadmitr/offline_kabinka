@@ -56,8 +56,9 @@ async function bootstrap(): Promise<void> {
   }
 
   // If the thumbnail pack is already in IndexedDB, hydrate it now so list/card
-  // thumbnails resolve from the offline bundle. Best-effort; never blocks boot.
-  void loadThumbsPackFromIDB().catch(() => {});
+  // thumbnails resolve from the offline bundle. Loads in parallel with shell mount
+  // and data fetch; the initial render awaits it (see below). No-op when no pack.
+  const thumbsReady = loadThumbsPackFromIDB().catch(() => {});
 
   const store = new Store<AppState>({
     locations: [],
@@ -303,6 +304,11 @@ async function bootstrap(): Promise<void> {
     sheet.listView.innerHTML = `<div class="list-error">${toUserMessage(e)}</div>`;
     return;
   }
+
+  // Wait for the thumbnail pack (hydrating since boot) so the first render resolves
+  // thumbnails from the offline bundle instead of the online fallback — critical
+  // offline, where the online fallback can't load. Cheap no-op when no pack exists.
+  await thumbsReady;
 
   // Initial render (list shows immediately even before map paints).
   drawList();
