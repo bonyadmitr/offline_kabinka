@@ -1,5 +1,13 @@
 import { beforeEach } from 'vitest';
-import { estimateUsage, deletePackage, formatBytes } from '../../src/offline/storage';
+import {
+  estimateUsage,
+  deletePackage,
+  deleteMapPackage,
+  deleteThumbsPackage,
+  mapDownloaded,
+  thumbsDownloaded,
+  formatBytes,
+} from '../../src/offline/storage';
 import { putBlob, blobSize, deleteBlob } from '../../src/offline/blobstore';
 import { getKV, setKV } from '../../src/data/idb';
 
@@ -44,6 +52,50 @@ test('deletePackage drops both blobs and clears the version markers', async () =
   expect(await blobSize('thumbs')).toBe(0);
   expect(await getKV('mapVersion')).toBeNull();
   expect(await getKV('thumbsIndex')).toBeNull();
+});
+
+test('deleteMapPackage removes only the map blob + version, leaving thumbs', async () => {
+  await putBlob('minsk', new Blob([new Uint8Array(8)]));
+  await putBlob('thumbs', new Blob([new Uint8Array(8)]));
+  await setKV('mapVersion', '202606261649');
+  await setKV('thumbsIndex', { 'a.jpg': [0, 8] });
+
+  await deleteMapPackage();
+
+  // Map gone + version cleared…
+  expect(await blobSize('minsk')).toBe(0);
+  expect(await getKV('mapVersion')).toBeNull();
+  // …but the thumbnail package is untouched.
+  expect(await blobSize('thumbs')).toBe(8);
+  expect(await getKV('thumbsIndex')).toEqual({ 'a.jpg': [0, 8] });
+});
+
+test('deleteThumbsPackage removes only the thumbs blob + index, leaving the map', async () => {
+  await putBlob('minsk', new Blob([new Uint8Array(8)]));
+  await putBlob('thumbs', new Blob([new Uint8Array(8)]));
+  await setKV('mapVersion', '202606261649');
+  await setKV('thumbsIndex', { 'a.jpg': [0, 8] });
+
+  await deleteThumbsPackage();
+
+  // Thumbs gone + index cleared…
+  expect(await blobSize('thumbs')).toBe(0);
+  expect(await getKV('thumbsIndex')).toBeNull();
+  // …but the map package is untouched.
+  expect(await blobSize('minsk')).toBe(8);
+  expect(await getKV('mapVersion')).toBe('202606261649');
+});
+
+test('mapDownloaded / thumbsDownloaded reflect blob presence independently', async () => {
+  expect(await mapDownloaded()).toBe(false);
+  expect(await thumbsDownloaded()).toBe(false);
+
+  await putBlob('minsk', new Blob([new Uint8Array(4)]));
+  expect(await mapDownloaded()).toBe(true);
+  expect(await thumbsDownloaded()).toBe(false);
+
+  await putBlob('thumbs', new Blob([new Uint8Array(4)]));
+  expect(await thumbsDownloaded()).toBe(true);
 });
 
 test('formatBytes renders MB/KB/bytes from the localized units', () => {

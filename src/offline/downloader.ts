@@ -18,6 +18,9 @@ import { setPack, type ThumbIndex } from './thumbs';
 import { PMTILES_KEY } from './pmtiles-source';
 import { t, type I18nKey } from '../i18n';
 
+/** Progress callback for a single package download: a plain 0..1 fraction. */
+export type DownloadProgress = (fraction: number) => void;
+
 /** Vite base URL (e.g. "/offline_kabinka/"); "/" outside a Vite build. */
 const BASE_URL =
   typeof import.meta !== 'undefined' && import.meta.env
@@ -124,6 +127,52 @@ export async function downloadToBlob(
 }
 
 /**
+ * Download just the map package: stream `minsk.pmtiles` into IndexedDB and
+ * record its version marker. `onProgress` is a plain 0..1 fraction for the
+ * per-row overlay. No-op-safe: callers re-render status from blobSize.
+ *
+ * Map-tile cache (#1): the online map is served by range requests over plain
+ * HTTP — those bytes live in the browser's own HTTP cache, which the app does
+ * not own (no Cache API / SW entry matches `*.pmtiles`; see vite.config.ts,
+ * where the map is excluded from precache and has no runtimeCaching rule). The
+ * stored IndexedDB blob now takes over via the pmtiles protocol, so there is no
+ * app-managed transient tile cache to clear here.
+ */
+export async function downloadMapPackage(onProgress: DownloadProgress): Promise<void> {
+  const blob = await downloadToBlob(
+    MAP_URL,
+    (loaded, total) => onProgress(total > 0 ? loaded / total : 0),
+    'MAP-01',
+  );
+  await putBlob(PMTILES_KEY, blob);
+  onProgress(1);
+  // Best-effort version baseline so the "update map" check can report "nothing
+  // to update". A missing/404 manifest (common in dev) just leaves it unset.
+  await recordMapVersion();
+}
+
+/**
+ * Download just the photo-thumbnails package: stream `thumbs.bin` into
+ * IndexedDB, fetch + store its index, and hydrate the in-memory pack so list/
+ * card thumbnails resolve from the bundle immediately. `onProgress` is a plain
+ * 0..1 fraction for the per-row overlay.
+ */
+export async function downloadThumbsPackage(onProgress: DownloadProgress): Promise<void> {
+  const blob = await downloadToBlob(
+    THUMBS_BIN_URL,
+    (loaded, total) => onProgress(total > 0 ? loaded / total : 0),
+    'API-01',
+  );
+  await putBlob(THUMBS_KEY, blob);
+  onProgress(1);
+
+  const index = await fetchThumbsIndex();
+  await setKV(THUMBS_INDEX_KV, index);
+  // Register the pack now so thumbnails switch to blob: URLs without a reload.
+  await loadThumbsPackFromIDB();
+}
+
+/**
  * Ensure both offline binaries are present in IndexedDB, skipping any already
  * downloaded, and load the thumbnail pack into memory. `onProgress(overall,
  * label)` reports a size-weighted 0..1 fraction and the current stage label.
@@ -137,8 +186,9 @@ export async function ensureOfflinePackage(
   const haveMap = (await blobSize(PMTILES_KEY)) > 0;
   const haveThumbs = (await blobSize(THUMBS_KEY)) > 0;
 
-  // Per-stage weights: skipped stages contribute 0 so the bar reflects only the
-  // remaining work. Use fallbacks until a real Content-Length is observed.
+  // Per-stage weights (bytes): skipped stages contribute 0 so the bar reflects
+  // only the remaining work. The published asset sizes (fallbacks) are a stable
+  // basis — accurate enough for the combined bar, and they keep it monotonic.
   const weights = {
     map: haveMap ? 0 : MAP_FALLBACK_BYTES,
     thumbs: haveThumbs ? 0 : THUMBS_FALLBACK_BYTES,
@@ -156,46 +206,25 @@ export async function ensureOfflinePackage(
     onProgress(Math.max(0, Math.min(1, done / totalW)), label);
   };
 
-  // ── 1) Map ──
+  // ── 1) Map (downloads + records version) ──
   if (!haveMap) {
     report('offline.stageMap');
-    const blob = await downloadToBlob(
-      MAP_URL,
-      (loaded, total) => {
-        if (total > 0) weights.map = total;
-        loadedFrac.map = total > 0 ? loaded / total : 0;
-        report('offline.stageMap');
-      },
-      'MAP-01',
-    );
-    await putBlob(PMTILES_KEY, blob);
-    loadedFrac.map = 1;
-    // Record the map version so the in-app "update map" check has a baseline and
-    // can correctly report "nothing to update". Best-effort: a missing/404
-    // manifest (common in dev) just leaves the marker unset.
-    await recordMapVersion();
+    await downloadMapPackage((frac) => {
+      loadedFrac.map = frac;
+      report('offline.stageMap');
+    });
   }
 
-  // ── 2) Thumbnails: binary pack + index ──
+  // ── 2) Thumbnails: binary pack + index + hydrate ──
   if (!haveThumbs) {
     report('offline.stageThumbs');
-    const blob = await downloadToBlob(
-      THUMBS_BIN_URL,
-      (loaded, total) => {
-        if (total > 0) weights.thumbs = total;
-        loadedFrac.thumbs = total > 0 ? loaded / total : 0;
-        report('offline.stageThumbs');
-      },
-      'API-01',
-    );
-    await putBlob(THUMBS_KEY, blob);
-    loadedFrac.thumbs = 1;
-
-    const index = await fetchThumbsIndex();
-    await setKV(THUMBS_INDEX_KV, index);
+    await downloadThumbsPackage((frac) => {
+      loadedFrac.thumbs = frac;
+      report('offline.stageThumbs');
+    });
   }
 
-  // ── 3) Hydrate the in-memory pack so thumbs resolve from the bundle ──
+  // ── 3) Ensure the in-memory pack is hydrated (e.g. thumbs already present) ──
   report('offline.stageFinalize');
   await loadThumbsPackFromIDB();
   report('offline.done');
@@ -262,8 +291,9 @@ export async function loadThumbsPackFromIDB(): Promise<void> {
 /**
  * Real size of the map archive, in bytes: read `bytes` from map-version.json.
  * Falls back to MAP_FALLBACK_BYTES on any network/parse/404 failure (offline).
+ * Used for the "Download / Delete map (N MB)" labels.
  */
-async function probeMapBytes(): Promise<number> {
+export async function mapPackageBytes(): Promise<number> {
   try {
     const res = await fetch(MAP_VERSION_URL);
     if (!res.ok) return MAP_FALLBACK_BYTES;
@@ -279,8 +309,9 @@ async function probeMapBytes(): Promise<number> {
 /**
  * Real size of thumbs.bin, in bytes: a cheap HEAD for its Content-Length.
  * Falls back to THUMBS_FALLBACK_BYTES on any failure (offline / no header).
+ * Used for the "Download / Delete photos (N MB)" labels.
  */
-async function probeThumbsBytes(): Promise<number> {
+export async function thumbsPackageBytes(): Promise<number> {
   try {
     const res = await fetch(THUMBS_BIN_URL, { method: 'HEAD' });
     const len = res.ok ? res.headers.get('Content-Length') : null;
@@ -297,7 +328,7 @@ async function probeThumbsBytes(): Promise<number> {
  * each component soft-falls back to a known value when offline.
  */
 export async function packageBytes(): Promise<number> {
-  const [map, thumbs] = await Promise.all([probeMapBytes(), probeThumbsBytes()]);
+  const [map, thumbs] = await Promise.all([mapPackageBytes(), thumbsPackageBytes()]);
   return map + thumbs;
 }
 
@@ -310,7 +341,7 @@ export async function pendingPackageBytes(): Promise<number> {
   const needMap = (await blobSize(PMTILES_KEY)) === 0;
   const needThumbs = (await blobSize(THUMBS_KEY)) === 0;
   let bytes = 0;
-  if (needMap) bytes += await probeMapBytes();
-  if (needThumbs) bytes += await probeThumbsBytes();
+  if (needMap) bytes += await mapPackageBytes();
+  if (needThumbs) bytes += await thumbsPackageBytes();
   return bytes;
 }

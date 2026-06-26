@@ -10,8 +10,12 @@
  *  • clearTransient()   → drop the runtime "photos" Cache (full-size originals)
  *                         and return the bytes freed. Never touches the blob
  *                         package or the precached shell.
- *  • deletePackage()    → delete the stored binaries + version markers and drop
- *                         the in-memory thumbnail pack. Leaves the photo cache.
+ *  • deleteMapPackage() → delete the stored map blob + version marker. After
+ *                         this the caller must re-point the map at the network.
+ *  • deleteThumbsPackage() → delete the stored thumbs blob + index and drop the
+ *                         in-memory pack (thumbnails fall back to the online URL).
+ *  • deletePackage()    → delete BOTH packages (map + thumbs). Leaves the photo
+ *                         cache. Convenience for "remove everything".
  */
 
 import { blobSize, deleteBlob } from './blobstore';
@@ -174,19 +178,46 @@ export async function transientBytes(): Promise<number> {
   return photoCacheBytes();
 }
 
+/** True if the map blob is stored offline (for the UI status/toggle). */
+export async function mapDownloaded(): Promise<boolean> {
+  return (await blobSize(PMTILES_KEY)) > 0;
+}
+
+/** True if the thumbnail pack blob is stored offline (for the UI status/toggle). */
+export async function thumbsDownloaded(): Promise<boolean> {
+  return (await blobSize(THUMBS_KEY)) > 0;
+}
+
 /**
- * Delete the offline package: the stored map + thumbnail binaries and their
- * version markers, plus the in-memory thumbnail pack (so thumbnails fall back
- * to the online URL). Leaves the transient photo cache untouched. After this
- * the map must be re-pointed at the network source by the caller.
+ * Delete the map package: the stored map blob and its version marker. Leaves
+ * the thumbnail pack and the transient photo cache untouched. After this the
+ * caller must re-point the map at the network source.
  */
-export async function deletePackage(): Promise<void> {
+export async function deleteMapPackage(): Promise<void> {
   await deleteBlob(PMTILES_KEY);
-  await deleteBlob(THUMBS_KEY);
-  // Reset version markers so a future update check re-evaluates from scratch.
+  // Reset the version marker so a future update check re-evaluates from scratch.
   await setKV(MAP_VERSION_KV, null);
+}
+
+/**
+ * Delete the thumbnail package: the stored thumbs blob + its index, plus the
+ * in-memory pack so list/card thumbnails fall back to the online URL (or the
+ * gallery placeholder when offline). Leaves the map and the photo cache.
+ */
+export async function deleteThumbsPackage(): Promise<void> {
+  await deleteBlob(THUMBS_KEY);
   await setKV(THUMBS_INDEX_KV, null);
   clearPack();
+}
+
+/**
+ * Delete the whole offline package — both the map and the thumbnails — by
+ * delegating to the per-package removers. Leaves the transient photo cache
+ * untouched. After this the map must be re-pointed at the network source.
+ */
+export async function deletePackage(): Promise<void> {
+  await deleteMapPackage();
+  await deleteThumbsPackage();
 }
 
 /** Human-readable byte size using the localized unit strings. */

@@ -2,10 +2,15 @@ import { afterEach, beforeEach, vi } from 'vitest';
 import {
   downloadToBlob,
   ensureOfflinePackage,
+  downloadMapPackage,
+  downloadThumbsPackage,
+  mapPackageBytes,
+  thumbsPackageBytes,
   loadThumbsPackFromIDB,
 } from '../../src/offline/downloader';
 import { putBlob, deleteBlob, blobSize } from '../../src/offline/blobstore';
-import { setKV } from '../../src/data/idb';
+import { getKV, setKV } from '../../src/data/idb';
+import { getThumbObjectUrl, clearPack } from '../../src/offline/thumbs';
 import { AppError } from '../../src/core/errors';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -50,6 +55,8 @@ beforeEach(async () => {
   await deleteBlob('minsk');
   await deleteBlob('thumbs');
   await setKV('thumbsIndex', undefined);
+  await setKV('mapVersion', undefined);
+  clearPack();
   vi.restoreAllMocks();
   // jsdom marks navigator.onLine true by default; ensure it.
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -139,6 +146,77 @@ test('ensureOfflinePackage: skips assets already present', async () => {
 
 test('loadThumbsPackFromIDB: no-op when no thumbs blob', async () => {
   await expect(loadThumbsPackFromIDB()).resolves.toBeUndefined();
+});
+
+// ── downloadMapPackage (split) ───────────────────────────────────────────────
+
+test('downloadMapPackage: stores the map blob, reports 0→1, records version', async () => {
+  const fetchMock = vi.fn((url: string) => {
+    if (url.includes('minsk.pmtiles')) return Promise.resolve(streamResponse(9000));
+    if (url.includes('map-version.json')) return Promise.resolve(jsonResponse({ version: 'v42' }));
+    throw new Error('unexpected url ' + url);
+  });
+  vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+  const seen: number[] = [];
+  await downloadMapPackage((f) => seen.push(f));
+
+  expect(await blobSize('minsk')).toBe(9000);
+  // Thumbs are NOT fetched by the map-only download.
+  expect(fetchMock.mock.calls.some((c) => (c[0] as string).includes('thumbs'))).toBe(false);
+  // Progress is monotonic and ends at exactly 1.
+  for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
+  expect(seen.at(-1)).toBe(1);
+  // Version marker recorded from the manifest.
+  expect(await getKV('mapVersion')).toBe('v42');
+});
+
+// ── downloadThumbsPackage (split) ────────────────────────────────────────────
+
+test('downloadThumbsPackage: stores blob + index and hydrates the pack', async () => {
+  const fetchMock = vi.fn((url: string) => {
+    if (url.includes('thumbs.bin')) return Promise.resolve(streamResponse(1000));
+    if (url.includes('thumbs-index.json'))
+      return Promise.resolve(jsonResponse({ 'a.jpg': [0, 1000] }));
+    throw new Error('unexpected url ' + url);
+  });
+  vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+  const seen: number[] = [];
+  await downloadThumbsPackage((f) => seen.push(f));
+
+  expect(await blobSize('thumbs')).toBe(1000);
+  // The map is NOT fetched by the thumbs-only download.
+  expect(fetchMock.mock.calls.some((c) => (c[0] as string).includes('minsk.pmtiles'))).toBe(false);
+  // Index stored under the kv key.
+  expect(await getKV('thumbsIndex')).toEqual({ 'a.jpg': [0, 1000] });
+  // Pack hydrated → a known thumb resolves to an object URL immediately, while an
+  // unknown name does not (proving the index, not just the blob, is registered).
+  // createObjectURL isn't implemented in jsdom for Node Blobs — stub it.
+  vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:stub' });
+  expect(getThumbObjectUrl('a.jpg')).toBe('blob:stub');
+  expect(getThumbObjectUrl('missing.jpg')).toBeNull();
+  expect(seen.at(-1)).toBe(1);
+});
+
+// ── size probes (split) ──────────────────────────────────────────────────────
+
+test('mapPackageBytes reads `bytes` from the manifest, falls back when absent', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ bytes: 12345 })));
+  expect(await mapPackageBytes()).toBe(12345);
+
+  // Manifest without a usable size → non-zero fallback.
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
+  expect(await mapPackageBytes()).toBeGreaterThan(0);
+});
+
+test('thumbsPackageBytes reads the HEAD Content-Length, falls back on failure', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(streamResponse(8000)));
+  expect(await thumbsPackageBytes()).toBe(8000);
+
+  // Network failure → non-zero fallback.
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+  expect(await thumbsPackageBytes()).toBeGreaterThan(0);
 });
 
 test('AppError code is preserved through downloadToBlob', async () => {

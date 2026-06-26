@@ -182,7 +182,7 @@ export const ru = {
   'settings.clearPhotosEmpty': 'Кеш фото пуст',
   'settings.cleared': (p) => `Освобождено ${p.x}`,
   // ── Offline package management ──
-  'settings.offlineTitle': 'Офлайн-пакет',
+  'settings.offlineTitle': 'Офлайн (карта и фото)',
   'settings.offlineStatus': 'Статус',
   // x = size in MB.
   'settings.offlineInstalled': (p) => `Скачан (${p.x} МБ)`,
@@ -191,6 +191,22 @@ export const ru = {
   'settings.offlineDownload': (p) => `Скачать офлайн-пакет (${p.n} МБ)`,
   'settings.offlineDelete': (p) => `Удалить офлайн-пакет (${p.n} МБ)`,
   'settings.offlineDeleted': 'Офлайн-пакет удалён. Карта работает при интернете.',
+  // ── Offline: two independent packages (map / photo thumbnails) ──
+  'settings.offlineMapTitle': 'Карта (офлайн)',
+  'settings.offlineThumbsTitle': 'Фото-превью (офлайн)',
+  // x = size in MB.
+  'settings.offlineMapInstalled': (p) => `Скачана (${p.x} МБ)`,
+  'settings.offlineMapNotInstalled': 'Не скачана',
+  'settings.offlineThumbsInstalled': (p) => `Скачаны (${p.x} МБ)`,
+  'settings.offlineThumbsNotInstalled': 'Не скачаны',
+  // n = size in MB.
+  'settings.offlineMapDownload': (p) => `Скачать (${p.n} МБ)`,
+  'settings.offlineMapDelete': (p) => `Удалить (${p.n} МБ)`,
+  'settings.offlineThumbsDownload': (p) => `Скачать (${p.n} МБ)`,
+  'settings.offlineThumbsDelete': (p) => `Удалить (${p.n} МБ)`,
+  'settings.offlineThumbsHint': 'Без пакета превью грузятся из сети по мере показа.',
+  'settings.offlineMapDeleted': 'Карта офлайн удалена. Карта работает при интернете.',
+  'settings.offlineThumbsDeleted': 'Фото-превью офлайн удалены.',
   'settings.installTitle': 'Как установить приложение',
   'settings.installIosSteps': 'Нажмите «Поделиться», затем «На экран „Домой“».',
   'settings.installBtn': 'Установить',
