@@ -1,6 +1,7 @@
 node_modules
 dist
-.claude/
+# Ignore only the local Claude launch/preview config; .claude/skills/ is committed.
+.claude/launch.json
 *.pmtiles
 public/map/
 public/thumbs/*.jpg
