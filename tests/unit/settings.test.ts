@@ -13,7 +13,6 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     setUiLang: [],
     setMapLang: [],
     setTheme: [],
-    setRadius: [],
     setNavigator: [],
     onDataUpdated: [],
     onMapUpdated: [],
@@ -24,12 +23,10 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     uiLang: 'ru',
     mapLang: 'ru',
     theme: 'light',
-    radius: 2,
     navigator: 'yandex_maps',
     setUiLang: (l) => calls.setUiLang.push(l),
     setMapLang: (l) => calls.setMapLang.push(l),
     setTheme: (t) => calls.setTheme.push(t),
-    setRadius: (km) => calls.setRadius.push(km),
     setNavigator: (id) => calls.setNavigator.push(id),
     onDataUpdated: () => {
       calls.onDataUpdated.push(true);
@@ -58,7 +55,6 @@ test('renders all sections incl. theme segment + offline package + version', () 
   expect(body.querySelector('[data-seg="theme"]')).toBeTruthy();
   expect(body.querySelectorAll('[data-seg="theme"] .seg-btn').length).toBe(3);
   expect(body.querySelector('[data-toggle="theme"]')).toBeFalsy();
-  expect(body.querySelector('[data-seg="radius"]')).toBeTruthy();
   expect(body.querySelectorAll('[data-nav]').length).toBe(4);
   // WU8 activated the update actions; they render enabled (no disabled attr).
   expect(body.querySelector('.set-action[data-act="refresh-data"]')).toBeTruthy();
@@ -126,14 +122,6 @@ test('map-lang segment calls setMapLang(en)', () => {
   expect(calls.setMapLang).toEqual(['en']);
 });
 
-test('radius segment calls setRadius(5) as a number', () => {
-  const { ctx, calls } = mockCtx();
-  openSettings(ctx);
-  const seg = document.querySelector('[data-seg="radius"]')!;
-  seg.querySelector<HTMLButtonElement>('[data-val="5"]')!.click();
-  expect(calls.setRadius).toEqual([5]);
-});
-
 test('navigator radio calls setNavigator', () => {
   const { ctx, calls } = mockCtx();
   openSettings(ctx);
@@ -144,16 +132,13 @@ test('navigator radio calls setNavigator', () => {
 });
 
 test('current selections are reflected as pressed/checked', () => {
-  const { ctx } = mockCtx({ theme: 'dark', mapLang: 'en', radius: 20, navigator: 'apple' });
+  const { ctx } = mockCtx({ theme: 'dark', mapLang: 'en', navigator: 'apple' });
   openSettings(ctx);
   expect(
     document.querySelector('[data-seg="theme"] [data-val="dark"]')!.getAttribute('aria-pressed'),
   ).toBe('true');
   expect(
     document.querySelector('[data-seg="mapLang"] [data-val="en"]')!.getAttribute('aria-pressed'),
-  ).toBe('true');
-  expect(
-    document.querySelector('[data-seg="radius"] [data-val="20"]')!.getAttribute('aria-pressed'),
   ).toBe('true');
   expect(
     document.querySelector<HTMLInputElement>('[data-nav][value="apple"]')!.checked,

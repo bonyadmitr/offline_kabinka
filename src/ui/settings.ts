@@ -27,7 +27,6 @@ import type { ThemePref } from '../core/theme';
 
 export type Lang = 'ru' | 'en';
 export type Theme = ThemePref;
-export type Radius = 1 | 2 | 5 | 20;
 export type NavigatorId = 'yandex_maps' | 'yandex_navi' | 'google' | 'apple';
 
 const APP_VERSION = '1.0.0';
@@ -37,12 +36,10 @@ export interface SettingsCtx {
   uiLang: Lang;
   mapLang: Lang;
   theme: Theme;
-  radius: Radius;
   navigator: NavigatorId;
   setUiLang(l: Lang): void;
   setMapLang(l: Lang): void;
   setTheme(t: Theme): void;
-  setRadius(km: Radius): void;
   setNavigator(id: NavigatorId): void;
   /** Re-read the refreshed dataset into the store (list + markers). */
   onDataUpdated(): void | Promise<void>;
@@ -65,8 +62,6 @@ const navOptions = (): Array<{ id: NavigatorId; label: string }> => [
   { id: 'google', label: t('settings.navGoogle') },
   { id: 'apple', label: t('settings.navApple') },
 ];
-
-const RADIUS_OPTIONS: Radius[] = [1, 2, 5, 20];
 
 export function openSettings(ctx: SettingsCtx): void {
   const modal = openModal({ title: t('settings.title') });
@@ -95,15 +90,6 @@ export function openSettings(ctx: SettingsCtx): void {
         { value: 'light', label: t('settings.themeLight') },
         { value: 'dark', label: t('settings.themeDark') },
       ], ctx.theme)}
-    </div>
-
-    <div class="set-group">
-      <div class="set-label">${esc(t('settings.listRadius'))}</div>
-      ${segment(
-        'radius',
-        RADIUS_OPTIONS.map((km) => ({ value: String(km), label: t('settings.radiusKm', { km }) })),
-        String(ctx.radius),
-      )}
     </div>
 
     <div class="set-group">
@@ -173,7 +159,6 @@ export function openSettings(ctx: SettingsCtx): void {
   // ── Segments ──
   wireSegment(body, 'uiLang', (v) => ctx.setUiLang(v as Lang));
   wireSegment(body, 'mapLang', (v) => ctx.setMapLang(v as Lang));
-  wireSegment(body, 'radius', (v) => ctx.setRadius(Number(v) as Radius));
   wireSegment(body, 'theme', (v) => ctx.setTheme(v as Theme));
 
   // ── Navigator radios ──

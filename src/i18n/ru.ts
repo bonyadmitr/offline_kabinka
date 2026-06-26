@@ -129,8 +129,6 @@ export const ru = {
   'settings.themeSystem': 'Система',
   'settings.themeLight': 'Светлая',
   'settings.themeDark': 'Тёмная',
-  'settings.listRadius': 'Радиус списка',
-  'settings.radiusKm': (p) => `${p.km} км`,
   'settings.defaultNavigator': 'Навигатор по умолчанию',
   'settings.navYandexMaps': 'Яндекс Карты',
   'settings.navYandexNavi': 'Яндекс Навигатор',
@@ -241,9 +239,12 @@ export const ru = {
   'route.distance': 'Расстояние',
   'route.bearing': 'Азимут',
   'route.openInNavigator': 'Открыть в навигаторе',
+  'route.compass': 'Компас (офлайн)',
+  'route.pickNavigator': 'В каком навигаторе открыть?',
+  'route.changeNavigator': 'Сменить навигатор',
   'route.hideRoute': 'Скрыть маршрут',
-  'route.needGeo': 'Включите геолокацию, чтобы построить маршрут',
-  'route.offlineNotice': 'Внешний навигатор требует интернета. Офлайн-линия уже построена.',
+  'route.needGeo': 'Включите геолокацию, чтобы показать компас',
+  'route.navOfflineNotice': 'Навигатор требует интернета или установленного приложения. Компас работает офлайн.',
   'route.compassUnavailable': 'Компас недоступен',
 } satisfies Dict;
 

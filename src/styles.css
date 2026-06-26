@@ -1829,10 +1829,47 @@ body.modal-open {
   gap: 10px;
 }
 
-.route-head {
+.route-head,
+.route-compass {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* The two top-level route actions span the panel width. */
+.route-action {
+  width: 100%;
+  justify-content: center;
+}
+
+/* "Change navigator" — small, secondary, left-aligned link-style button. */
+.route-change-nav {
+  align-self: flex-start;
+  margin-top: -4px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.route-change-nav:active {
+  opacity: 0.6;
+}
+
+/* Inline navigator picker (first use / change). */
+.route-nav-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.route-nav-picker-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
 }
 
 .route-arrow {
@@ -1880,20 +1917,6 @@ body.modal-open {
   color: var(--text-2);
 }
 
-.route-navs {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.route-navs-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
 .route-offline {
   font-size: 12px;
   color: var(--closed);
@@ -1916,11 +1939,6 @@ body.modal-open {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-}
-
-.route-nav-btn.is-default {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .route-nav-btn:active {

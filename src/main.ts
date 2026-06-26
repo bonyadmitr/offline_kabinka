@@ -11,19 +11,12 @@ import { mountShell } from './ui/shell';
 import { renderList, type UserPos } from './ui/list';
 import { renderCard } from './ui/card';
 import { openFilters, activeFilterCount } from './ui/filters';
-import { openSettings, type SettingsCtx, type Radius, type NavigatorId } from './ui/settings';
+import { openSettings, type SettingsCtx, type NavigatorId } from './ui/settings';
 import { createSearch } from './ui/search';
 import { shareLocation, showToast } from './ui/share';
 import { startRoute } from './routing';
 import { setLang, getLang, t } from './i18n';
-import {
-  loadTheme,
-  saveTheme,
-  loadRadius,
-  saveRadius,
-  loadNavigator,
-  saveNavigator,
-} from './core/settings';
+import { loadTheme, saveTheme, loadNavigator, saveNavigator } from './core/settings';
 import { effectiveTheme, watchSystemTheme, type ThemePref } from './core/theme';
 import { toUserMessage } from './core/errors';
 import {
@@ -45,7 +38,6 @@ interface AppState {
   uiLang: 'ru' | 'en';
   mapLang: 'ru' | 'en';
   theme: ThemePref;
-  radius: Radius;
   navigator: NavigatorId;
 }
 
@@ -72,7 +64,6 @@ async function bootstrap(): Promise<void> {
     uiLang: getLang(), // persisted in localStorage by the i18n module
     mapLang: 'ru',
     theme: loadTheme(), // 'system' | 'light' | 'dark', default 'system'
-    radius: loadRadius(),
     navigator: loadNavigator(),
   });
 
@@ -250,7 +241,6 @@ async function bootstrap(): Promise<void> {
       uiLang: s.uiLang,
       mapLang: s.mapLang,
       theme: s.theme,
-      radius: s.radius,
       navigator: s.navigator,
       setUiLang: (l) => {
         // Swap the active dictionary (also persists to localStorage), mirror it in
@@ -269,10 +259,6 @@ async function bootstrap(): Promise<void> {
         saveTheme(pref);
         // Apply the resolved effective theme to <html> + the map style.
         applyEffectiveTheme();
-      },
-      setRadius: (km) => {
-        store.set({ radius: km });
-        saveRadius(km);
       },
       setNavigator: (id) => {
         store.set({ navigator: id });
