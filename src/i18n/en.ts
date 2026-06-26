@@ -117,6 +117,7 @@ export const en = {
   'settings.navGoogle': 'Google',
   'settings.navApple': 'Apple',
   'settings.soonGroup': 'Coming soon',
+  'settings.updatesGroup': 'Updates',
   'settings.refreshData': 'Refresh data',
   'settings.refreshMap': 'Refresh map',
   'settings.appSize': 'App size',
@@ -163,6 +164,16 @@ export const en = {
   'settings.installBtn': 'Install',
   'settings.installUnavailable':
     'Open the site in a browser and add it to your home screen from the browser menu.',
+
+  // ── In-app updates (WU8) ──
+  'update.dataTitle': 'Updating data',
+  'update.mapTitle': 'Updating map',
+  'update.phaseList': 'Fetching list…',
+  'update.phaseDetails': (p) => `Details ${p.i}/${p.m}`,
+  'update.noChanges': 'No new data',
+  'update.summary': (p) => `Added: ${p.added}, removed: ${p.removed}, updated: ${p.changed}`,
+  'update.mapNothing': 'The map is up to date, nothing to update',
+  'update.mapDone': 'Map updated',
 
   // ── Install hint banner ──
   'install.bannerIos': 'Install the app: Share → Add to Home Screen',

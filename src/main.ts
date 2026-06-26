@@ -29,7 +29,7 @@ import {
   pendingPackageBytes,
 } from './offline/downloader';
 import { blobSize } from './offline/blobstore';
-import { PMTILES_KEY } from './offline/pmtiles-source';
+import { PMTILES_KEY, useStoredPmtilesIfPresent } from './offline/pmtiles-source';
 import { toast, progressOverlay } from './ui/toast';
 import { initInstallHint } from './ui/install-hint';
 
@@ -236,6 +236,23 @@ async function bootstrap(): Promise<void> {
       setNavigator: (id) => {
         store.set({ navigator: id });
         saveNavigator(id);
+      },
+      onDataUpdated: async () => {
+        // Re-read the freshly persisted dataset so the list + markers update
+        // without a reload. applyFilters keeps the active filter applied.
+        const locations = await loadLocations();
+        store.set({ locations, filtered: applyFilters(locations, store.get().filter) });
+        // Refresh an open card too (its data may have changed).
+        if (store.get().selectedId != null) drawCard(store.get().selectedId!);
+      },
+      onMapUpdated: async () => {
+        // Register the newly stored archive on the pmtiles protocol, then rebuild
+        // the style pointing at the stored source ('minsk'). setStyle drops our
+        // custom point source/layers, so re-add markers once the new style is live
+        // (mirrors the theme-swap path).
+        const src = (await useStoredPmtilesIfPresent(PMTILES_KEY)) ?? shell.pmtilesUrl;
+        if (mapReady) map.once('styledata', reAddMarkers);
+        map.setStyle(buildStyle({ lang: store.get().mapLang, theme: store.get().theme, pmtilesUrl: src }));
       },
     };
   };

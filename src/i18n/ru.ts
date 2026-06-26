@@ -135,6 +135,7 @@ export const ru = {
   'settings.navGoogle': 'Google',
   'settings.navApple': 'Apple',
   'settings.soonGroup': 'Скоро',
+  'settings.updatesGroup': 'Обновления',
   'settings.refreshData': 'Обновить данные',
   'settings.refreshMap': 'Обновить карту',
   'settings.appSize': 'Размер приложения',
@@ -183,6 +184,18 @@ export const ru = {
   'settings.installBtn': 'Установить',
   'settings.installUnavailable':
     'Откройте сайт в браузере и добавьте на главный экран через меню браузера.',
+
+  // ── In-app updates (WU8) ──
+  'update.dataTitle': 'Обновление данных',
+  'update.mapTitle': 'Обновление карты',
+  'update.phaseList': 'Получение списка…',
+  // i = current index, m = total.
+  'update.phaseDetails': (p) => `Детали ${p.i}/${p.m}`,
+  'update.noChanges': 'Новых данных нет',
+  // added/removed/changed counts.
+  'update.summary': (p) => `Добавлено: ${p.added}, удалено: ${p.removed}, обновлено: ${p.changed}`,
+  'update.mapNothing': 'Карта актуальна, обновлять нечего',
+  'update.mapDone': 'Карта обновлена',
 
   // ── Install hint banner ──
   'install.bannerIos': 'Установите приложение: Поделиться → На экран „Домой“',

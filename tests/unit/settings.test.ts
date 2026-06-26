@@ -15,6 +15,8 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     setTheme: [],
     setRadius: [],
     setNavigator: [],
+    onDataUpdated: [],
+    onMapUpdated: [],
   };
   const ctx: SettingsCtx = {
     uiLang: 'ru',
@@ -27,6 +29,12 @@ function mockCtx(over: Partial<SettingsCtx> = {}): {
     setTheme: (t) => calls.setTheme.push(t),
     setRadius: (km) => calls.setRadius.push(km),
     setNavigator: (id) => calls.setNavigator.push(id),
+    onDataUpdated: () => {
+      calls.onDataUpdated.push(true);
+    },
+    onMapUpdated: () => {
+      calls.onMapUpdated.push(true);
+    },
     ...over,
   };
   return { ctx, calls };
@@ -41,8 +49,11 @@ test('renders all sections incl. device id + version', () => {
   expect(body.querySelector('[data-toggle="theme"]')).toBeTruthy();
   expect(body.querySelector('[data-seg="radius"]')).toBeTruthy();
   expect(body.querySelectorAll('[data-nav]').length).toBe(4);
-  // Only refresh-data + refresh-map remain disabled placeholders (WU8).
-  expect(body.querySelectorAll('.set-action[disabled]').length).toBe(2);
+  // WU8 activated the update actions; they render enabled (no disabled attr).
+  expect(body.querySelector('.set-action[data-act="refresh-data"]')).toBeTruthy();
+  expect(body.querySelector('.set-action[data-act="refresh-map"]')).toBeTruthy();
+  expect(body.querySelector('.set-action[data-act="refresh-data"][disabled]')).toBeFalsy();
+  expect(body.querySelector('.set-action[data-act="refresh-map"][disabled]')).toBeFalsy();
   // WU7b activated: storage usage readout, clear-cache, reinstall, install help.
   expect(body.querySelector('[data-usage]')).toBeTruthy();
   expect(body.querySelector('.set-action[data-act="clear-cache"]')).toBeTruthy();

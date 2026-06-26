@@ -13,6 +13,8 @@ import {
 import { renderInstallHelp } from './install-hint';
 import { progressOverlay, toast } from './toast';
 import { toUserMessage } from '../core/errors';
+import { updateData } from '../update/data-update';
+import { checkMapUpdate, updateMap } from '../update/map-update';
 
 export type Lang = 'ru' | 'en';
 export type Theme = 'light' | 'dark';
@@ -33,6 +35,10 @@ export interface SettingsCtx {
   setTheme(t: Theme): void;
   setRadius(km: Radius): void;
   setNavigator(id: NavigatorId): void;
+  /** Re-read the refreshed dataset into the store (list + markers). */
+  onDataUpdated(): void | Promise<void>;
+  /** Re-register the stored map source and rebuild the style (no reload). */
+  onMapUpdated(): void | Promise<void>;
 }
 
 // Built per-open so labels reflect the active language.
@@ -44,12 +50,6 @@ const navOptions = (): Array<{ id: NavigatorId; label: string }> => [
 ];
 
 const RADIUS_OPTIONS: Radius[] = [1, 2, 5, 20];
-
-/** Data/map refresh remain placeholders until WU8. */
-const placeholders = (): Array<{ act: string; label: string }> => [
-  { act: 'refresh-data', label: t('settings.refreshData') },
-  { act: 'refresh-map', label: t('settings.refreshMap') },
-];
 
 export function openSettings(ctx: SettingsCtx): void {
   const modal = openModal({ title: t('settings.title') });
@@ -131,15 +131,14 @@ export function openSettings(ctx: SettingsCtx): void {
     </div>
 
     <div class="set-group">
-      <div class="set-label">${esc(t('settings.soonGroup'))}</div>
+      <div class="set-label">${esc(t('settings.updatesGroup'))}</div>
       <div class="set-actions">
-        ${placeholders().map(
-          (p) => `
-          <button type="button" class="set-action" data-act="${esc(p.act)}" disabled>
-            <span>${esc(p.label)}</span>
-            <span class="set-soon">${esc(t('common.soon'))}</span>
-          </button>`,
-        ).join('')}
+        <button type="button" class="set-action" data-act="refresh-data">
+          <span>${esc(t('settings.refreshData'))}</span>
+        </button>
+        <button type="button" class="set-action" data-act="refresh-map">
+          <span>${esc(t('settings.refreshMap'))}</span>
+        </button>
       </div>
     </div>
 
@@ -180,6 +179,81 @@ export function openSettings(ctx: SettingsCtx): void {
 
   // ── Storage: usage readout, clear cache, reinstall ──
   wireStorage(body);
+
+  // ── Updates: refresh data, refresh map ──
+  wireUpdates(body, ctx);
+}
+
+/** Wire the "refresh data" + "refresh map" actions (WU8). */
+function wireUpdates(body: HTMLElement, ctx: SettingsCtx): void {
+  const dataBtn = body.querySelector<HTMLButtonElement>('[data-act="refresh-data"]');
+  const mapBtn = body.querySelector<HTMLButtonElement>('[data-act="refresh-map"]');
+
+  // ── Refresh data ──
+  dataBtn?.addEventListener('click', () => {
+    dataBtn.disabled = true;
+    const overlay = progressOverlay(t('update.dataTitle'));
+    const controller = new AbortController();
+
+    const onProgress = (done: number, total: number, phase: string): void => {
+      // Indeterminate until the list lands (total known); then a real fraction.
+      overlay.update(total > 0 ? done / total : -1, phase);
+    };
+
+    const start = (): void => {
+      updateData(onProgress, controller.signal)
+        .then((r) => {
+          overlay.close();
+          if (r.added + r.removed + r.changed === 0) {
+            toast(t('update.noChanges'));
+          } else {
+            toast(t('update.summary', { added: r.added, removed: r.removed, changed: r.changed }));
+          }
+          void ctx.onDataUpdated();
+        })
+        .catch((e) => {
+          overlay.error(toUserMessage(e), { onRetry: start });
+        })
+        .finally(() => {
+          dataBtn.disabled = false;
+        });
+    };
+    start();
+  });
+
+  // ── Refresh map ──
+  mapBtn?.addEventListener('click', () => {
+    mapBtn.disabled = true;
+    void checkMapUpdate()
+      .then((check) => {
+        if (!check.updateAvailable) {
+          toast(t('update.mapNothing'));
+          mapBtn.disabled = false;
+          return;
+        }
+
+        const overlay = progressOverlay(t('update.mapTitle'));
+        const start = (): void => {
+          updateMap((loaded, total) => overlay.update(total > 0 ? loaded / total : -1, t('update.mapTitle')))
+            .then(async () => {
+              await ctx.onMapUpdated();
+              overlay.close();
+              toast(t('update.mapDone'));
+            })
+            .catch((e) => {
+              overlay.error(toUserMessage(e), { onRetry: start });
+            })
+            .finally(() => {
+              mapBtn.disabled = false;
+            });
+        };
+        start();
+      })
+      .catch((e) => {
+        toast(toUserMessage(e), { type: 'error' });
+        mapBtn.disabled = false;
+      });
+  });
 }
 
 /** Render the usage breakdown bars + total. */
