@@ -38,7 +38,7 @@ export default defineConfig({
         // map/map-version.json. The large offline binaries (the map *.pmtiles
         // and thumbs.bin) are NOT json, so the glob never matches them — they
         // are streamed into IndexedDB by the WU7b downloader instead.
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}', 'fonts/**/*.pbf'],
         // Bump the precache budget so locations.json fits (Workbox warns/drops
         // files larger than the 2 MiB default; ours is well under, but be safe).
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

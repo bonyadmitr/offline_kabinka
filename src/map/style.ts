@@ -1,8 +1,8 @@
 import type { StyleSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-// TODO (WU6/WU7): replace with self-hosted glyphs for full offline support.
-// Current public server requires network access.
-const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
+// Glyphs are served from the local public/fonts/ directory so they work offline
+// and don't depend on an external server for the first render.
+const GLYPHS_URL = import.meta.env.BASE_URL + 'fonts/{fontstack}/{range}.pbf';
 
 export interface BuildStyleOpts {
   lang: 'ru' | 'en';
