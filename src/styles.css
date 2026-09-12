@@ -119,10 +119,14 @@ img {
 }
 
 .toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: var(--tap);
   padding: 0 16px;
   border: none;
   border-radius: 22px;
+  line-height: 1;
   background: var(--panel-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -1229,6 +1233,18 @@ body.viewer-open {
   right: 12px;
   bottom: 48px;
   z-index: 10;
+}
+
+/* Mobile: the bottom sheet sits over the map (collapsed peek = COLLAPSED_PX 88px
+   in sheet.ts, drawn from bottom:0). Lift the zoom/geolocate stack above that peek
+   plus the safe-area inset so neither control hides under the collapsed strip. */
+@media (max-width: 767px) {
+  .map-ctrl-geolocate {
+    bottom: calc(88px + var(--safe-bottom) + 12px);
+  }
+  .map-ctrl-zoom {
+    bottom: calc(88px + var(--safe-bottom) + 12px + var(--tap) + 8px);
+  }
 }
 
 /* ============================================================================
