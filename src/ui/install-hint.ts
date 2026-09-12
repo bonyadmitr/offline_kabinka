@@ -25,8 +25,8 @@ let deferredPrompt: BeforeInstallPromptEvent | null = null;
 export function isStandalone(): boolean {
   const iosStandalone =
     (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  // The manifest ships `display: minimal-ui`, so check every installed display
-  // mode — not just standalone — or an installed app is mistaken for a browser tab.
+  // Check every installed display mode — not just standalone — so a manifest that
+  // ships minimal-ui/fullscreen isn't mistaken for a plain browser tab.
   const displayInstalled =
     typeof matchMedia === 'function' &&
     ['standalone', 'minimal-ui', 'fullscreen'].some(
