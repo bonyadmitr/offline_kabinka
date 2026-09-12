@@ -21,14 +21,18 @@ interface BeforeInstallPromptEvent extends Event {
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 
-/** True when running as an installed/standalone PWA. */
+/** True when running as an installed PWA (any installed display mode). */
 export function isStandalone(): boolean {
   const iosStandalone =
     (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  const displayStandalone =
+  // The manifest ships `display: minimal-ui`, so check every installed display
+  // mode — not just standalone — or an installed app is mistaken for a browser tab.
+  const displayInstalled =
     typeof matchMedia === 'function' &&
-    matchMedia('(display-mode: standalone)').matches;
-  return iosStandalone || displayStandalone;
+    ['standalone', 'minimal-ui', 'fullscreen'].some(
+      (mode) => matchMedia(`(display-mode: ${mode})`).matches,
+    );
+  return iosStandalone || displayInstalled;
 }
 
 /** Heuristic: iOS Safari (where there is no beforeinstallprompt). */

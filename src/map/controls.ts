@@ -140,6 +140,29 @@ export function addGeolocate(map: maplibregl.Map, opts: GeolocateOpts): void {
     <path d="M12 2l0 0"/>
   </svg>`;
 
+  const onPosition = (pos: GeolocationPosition): void => {
+    const { longitude: lng, latitude: lat, accuracy } = pos.coords;
+    _lastPosition = { lng, lat, accuracy };
+
+    // Wait for map style to be ready before adding layers
+    const doUpdate = (): void => updateUserLayers(map, lng, lat, accuracy);
+    if (map.isStyleLoaded()) {
+      doUpdate();
+    } else {
+      map.once('load', doUpdate);
+    }
+
+    map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15) });
+    btn.classList.add('active');
+  };
+
+  const onFailure = (err: GeolocationPositionError): void => {
+    // 1 = permission denied (user action required), 2/3 = unavailable/timeout (retry-able).
+    const code = err.code === err.PERMISSION_DENIED ? 'GEO-02' : 'GEO-03';
+    opts.onError?.(new AppError(code, err));
+    btn.classList.remove('active');
+  };
+
   btn.addEventListener('click', () => {
     if (!navigator.geolocation) {
       opts.onError?.(new AppError('GEO-01', new Error('Geolocation not supported')));
@@ -147,26 +170,21 @@ export function addGeolocate(map: maplibregl.Map, opts: GeolocateOpts): void {
     }
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { longitude: lng, latitude: lat, accuracy } = pos.coords;
-        _lastPosition = { lng, lat, accuracy };
-
-        // Wait for map style to be ready before adding layers
-        const doUpdate = (): void => updateUserLayers(map, lng, lat, accuracy);
-        if (map.isStyleLoaded()) {
-          doUpdate();
-        } else {
-          map.once('load', doUpdate);
-        }
-
-        map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15) });
-        btn.classList.add('active');
-      },
+      onPosition,
       (err) => {
-        opts.onError?.(new AppError('GEO-01', err));
-        btn.classList.remove('active');
+        // High-accuracy (GPS) can time out indoors or on desktop. Fall back once to a
+        // coarse, cache-friendly fix before surfacing the error to the user.
+        if (err.code === err.TIMEOUT) {
+          navigator.geolocation.getCurrentPosition(onPosition, onFailure, {
+            enableHighAccuracy: false,
+            timeout: 10000,
+            maximumAge: 300000,
+          });
+        } else {
+          onFailure(err);
+        }
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   });
 
