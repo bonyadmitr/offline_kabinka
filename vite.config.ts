@@ -18,12 +18,7 @@ export default defineConfig({
         lang: 'ru',
         start_url: '.',
         scope: '.',
-        // minimal-ui (not standalone): iOS/WebKit suppresses the geolocation &
-        // device-orientation permission prompts inside a home-screen "standalone"
-        // PWA, so getCurrentPosition() fails outright. minimal-ui keeps a slim
-        // browser affordance and restores those prompts. Takes effect only after
-        // the user removes and re-adds the app to the Home Screen.
-        display: 'minimal-ui',
+        display: 'standalone',
         background_color: '#15151a',
         theme_color: '#1b1b1f',
         icons: [
